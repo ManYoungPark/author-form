@@ -2,202 +2,999 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>저자 정보 입력</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>논문 저자 서명</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    form { max-width: 600px; margin: auto; border: 1px solid #ccc; padding: 20px; border-radius: 10px; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
-    input { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 5px; }
-    #signature { border: 2px solid #333; border-radius: 8px; width: 100%; height: 200px; margin-top: 10px; touch-action: none; }
-    button { margin: 10px 5px 0 0; padding: 10px 20px; font-size: 14px; cursor: pointer; }
-    table { border-collapse: collapse; width: 100%; margin-top: 30px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #f2f2f2; }
-    img { max-height: 80px; }
-    .delete-box { margin-top: 20px; }
+    :root {
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --text: #1b1f24;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --accent: #3b5bdb;
+      --accent-weak: #edf2ff;
+      --ok: #2b8a3e;
+      --ok-weak: #ebfbee;
+      --warn: #b35c00;
+      --warn-weak: #fff4e6;
+      --danger: #c92a2a;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      font-size: 15px; line-height: 1.5;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    h1 { font-size: 22px; margin: 0 0 4px; line-height: 1.35; word-break: keep-all; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+
+    /* 상단바 */
+    .topbar {
+      position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; gap: 16px; padding: 0 16px; height: 56px;
+    }
+    .brand { font-weight: 700; color: var(--text); font-size: 16px; white-space: nowrap; }
+    .topbar nav { display: flex; gap: 4px; margin-left: auto; }
+    .topbar nav a { padding: 8px 12px; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: 14px; }
+    .topbar nav a.active { background: var(--accent-weak); color: var(--accent); }
+    body[data-mode="sign"] .topbar nav { display: none; }
+
+    main { max-width: 960px; margin: 0 auto; padding: 24px 16px 80px; }
+    .page-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .page-head > div:first-child { flex: 1 1 320px; min-width: 0; }
+    .back { display: inline-block; margin-bottom: 8px; font-size: 14px; color: var(--muted); }
+
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+    .card.flush { padding: 0; overflow: hidden; }
+
+    /* 버튼 */
+    button, .btn {
+      font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--text);
+      padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      min-height: 38px; justify-content: center;
+    }
+    button:hover, .btn:hover { background: #f2f4f7; }
+    button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: #2f4ac0; }
+    button.ghost { border-color: transparent; background: transparent; }
+    button.ghost:hover { background: #f2f4f7; }
+    button.danger { color: var(--danger); }
+    button.icon { padding: 6px 9px; min-height: 34px; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* 폼 */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; color: #344054; margin-bottom: 4px; }
+    .field label .req { color: var(--danger); }
+    input[type=text], input[type=search], textarea, select {
+      width: 100%; font: inherit; font-size: 15px; padding: 9px 12px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: var(--text);
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    textarea.autogrow { min-height: 0; resize: none; overflow: hidden; line-height: 1.45; }
+    .grid2 .full { grid-column: 1 / -1; }
+    .section-label { margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--line); font-weight: 700; font-size: 14px; }
+    input:focus, textarea:focus { outline: 2px solid var(--accent-weak); border-color: var(--accent); }
+    .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin-top: 10px; cursor: pointer; }
+    .check input { margin-top: 3px; width: 16px; height: 16px; }
+
+    /* 배지·진행률 */
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .badge.ok { background: var(--ok-weak); color: var(--ok); }
+    .badge.wait { background: var(--warn-weak); color: var(--warn); }
+    .badge.star { background: var(--accent-weak); color: var(--accent); }
+    .progress { height: 6px; background: #eef0f3; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+    .progress > i { display: block; height: 100%; background: var(--ok); }
+
+    /* 논문 카드 */
+    .paper-list { display: grid; gap: 12px; }
+    .paper-card { display: block; color: inherit; }
+    .paper-card:hover { border-color: #c5ccd8; }
+    .paper-card .title { font-weight: 700; font-size: 16px; word-break: keep-all; }
+    .paper-card .meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+    /* 저자 행 */
+    .author-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .author-row:last-child { border-bottom: 0; }
+    .author-row .num { width: 26px; height: 26px; border-radius: 50%; background: #f2f4f7; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+    .author-row .info { flex: 1; min-width: 0; }
+    .author-row .name { font-weight: 700; }
+    .author-row .sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .author-row .sig { width: 90px; height: 40px; flex: none; display: grid; place-items: center; }
+    .author-row .sig img { max-width: 90px; max-height: 40px; }
+    .author-row .ctl { display: flex; gap: 2px; flex: none; }
+    .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+
+    /* 저자 선택 칩 */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; max-height: 260px; overflow: auto; }
+    .chip { border: 1px solid #d0d5dd; background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 500; min-height: 34px; }
+    .chip:hover { border-color: var(--accent); background: var(--accent-weak); }
+    .chip .en { color: var(--muted); font-size: 12px; margin-left: 4px; }
+    .chip.add { border-style: dashed; color: var(--accent); font-weight: 600; }
+
+    /* 서명 화면 이름 버튼 */
+    .sign-head, .sign-row { display: grid; grid-template-columns: 52px 1.1fr 1.6fr 1.4fr 110px 100px; gap: 12px; align-items: center; padding: 10px 16px; }
+    .sign-head { font-size: 12px; font-weight: 700; color: var(--muted); background: #f9fafb; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .sign-row { border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.45; cursor: pointer; word-break: break-word; }
+    .sign-row:hover { background: #f9fafb; }
+    .sign-row .muted { font-size: 13px; }
+    .sign-row .c-sig { height: 44px; display: flex; align-items: center; }
+    .sign-row .c-sig img { max-width: 110px; max-height: 44px; }
+    .sign-row .c-act { text-align: right; }
+    .sign-row .c-no { font-weight: 700; color: var(--muted); }
+
+    /* 서명 위젯(폼 안) */
+    .sig-box { border: 1px dashed #c5ccd8; border-radius: 10px; height: 120px; display: grid; place-items: center; background: #fcfcfd; margin: 6px 0 10px; }
+    .sig-box img { max-width: 90%; max-height: 104px; }
+
+    /* 대화상자 */
+    dialog { border: 0; border-radius: 16px; padding: 0; width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); box-shadow: 0 20px 50px rgba(0,0,0,.25); color: var(--text); }
+    dialog::backdrop { background: rgba(16,24,40,.45); }
+    .dlg-head { position: sticky; top: 0; background: var(--surface); padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; z-index: 1; }
+    .dlg-head h2 { margin: 0; flex: 1; }
+    .dlg-body { padding: 20px; }
+    .dlg-foot { position: sticky; bottom: 0; background: var(--surface); padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* 서명 패드 */
+    #sigdlg { width: min(760px, calc(100vw - 24px)); }
+    .pad-wrap { position: relative; height: 260px; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+    .pad-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    .pad-line { position: absolute; left: 6%; right: 6%; bottom: 28%; border-bottom: 1.5px solid #d0d5dd; pointer-events: none; }
+    .pad-hint { position: absolute; left: 6%; bottom: calc(28% + 6px); color: #b0b7c3; font-size: 14px; pointer-events: none; }
+    .pad-wrap.drawn .pad-hint { display: none; }
+
+    /* 토스트 */
+    #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1000; display: grid; gap: 8px; pointer-events: none; }
+    #toast div { background: #1b1f24; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; box-shadow: var(--shadow); animation: pop .2s ease; max-width: 90vw; }
+    #toast div.err { background: var(--danger); }
+    @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+
+    /* 인쇄용 표 */
+    .print-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
+    .print-table th, .print-table td { border: 1px solid #cfd4dc; padding: 6px 8px; vertical-align: middle; }
+    .print-table th { background: #f2f4f7; }
+    .print-table td.c { text-align: center; }
+    .print-table img { max-height: 44px; max-width: 120px; }
+    .table-scroll { overflow-x: auto; }
+
+    @media (max-width: 640px) {
+      main { padding: 16px 12px 80px; }
+      h1 { font-size: 19px; }
+      .grid2 { grid-template-columns: 1fr; }
+      .card { padding: 16px; }
+      .author-row { flex-wrap: wrap; padding: 12px; }
+      .author-row .info { flex-basis: calc(100% - 40px); }
+      .author-row .num ~ .sig { margin-left: 38px; }
+      .author-row .ctl { margin-left: auto; }
+      .sign-head { display: none; }
+      .sign-row { grid-template-columns: 1fr auto; grid-template-areas: "name no" "aff aff" "mail mail" "sig act"; gap: 6px 12px; padding: 14px 16px; }
+      .sign-row .c-no { grid-area: no; justify-self: end; }
+      .sign-row .c-name { grid-area: name; }
+      .sign-row .c-aff { grid-area: aff; }
+      .sign-row .c-mail { grid-area: mail; }
+      .sign-row .c-sig { grid-area: sig; }
+      .sign-row .c-act { grid-area: act; }
+      dialog, #sigdlg { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
+      #sigdlg[open] { display: flex; flex-direction: column; }
+      #sigdlg .dlg-body { flex: 1; display: flex; flex-direction: column; padding: 12px; }
+      #sigdlg .pad-wrap { flex: 1; height: auto; min-height: 200px; }
+    }
+
+    @media print {
+      .topbar, .no-print, #toast { display: none !important; }
+      body { background: #fff; }
+      main { max-width: none; padding: 0; }
+      .card { box-shadow: none; border: 0; padding: 0; }
+    }
   </style>
 </head>
 <body>
-  <h2 style="text-align:center;">저자 정보 입력 + 서명필요 </h2>
+  <header class="topbar">
+    <a href="#/" class="brand">✍️ 논문 저자 서명</a>
+    <nav>
+      <a href="#/" data-nav="papers">논문</a>
+      <a href="#/authors" data-nav="authors">저자 관리</a>
+    </nav>
+  </header>
 
-  <form>
-    <label>Title: Real-World Patterns of Korean Medicine and Combined Korean–Western Medicine Use in Patients with Chronic Cough: A Nationwide Cohort Study</label>
-     <label>이름(한글)</label>
-    <input type="text" id="name_kr" required>
-    <label>이름(영문)</label>
-    <input type="text" id="name_en" required>
-    <label>소속(한글)</label>
-    <input type="text" id="affiliation_kr" required>
-    <label>소속(영문)</label>
-    <input type="text" id="affiliation_en" required>
-    <label>ORCID</label>
-    <input type="text" id="orcid">
-    <label>이메일</label>
-    <input type="email" id="email" required>
+  <main id="app"><p class="muted">불러오는 중…</p></main>
 
-    <label>서명 (캔버스 또는 파일 업로드)</label>
-    <canvas id="signature"></canvas><br>
-    <input type="file" id="signature_file" accept="image/*"><br>
-    <button type="button" onclick="clearPad()">서명 지우기</button>
-    <button type="button" onclick="submitData()">제출하기</button>
-  </form>
+  <dialog id="modal"></dialog>
 
-  <div id="authorList"></div>
+  <dialog id="sigdlg">
+    <div class="dlg-head">
+      <h2>서명하기</h2>
+      <button type="button" class="ghost icon" data-act="close" aria-label="닫기">✕</button>
+    </div>
+    <div class="dlg-body">
+      <p class="muted small" style="margin:0 0 8px">마우스, 손가락, 펜으로 아래 칸에 서명하세요.</p>
+      <div class="pad-wrap"><canvas></canvas><div class="pad-line"></div><div class="pad-hint">여기에 서명</div></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" data-act="undo">↶ 되돌리기</button>
+      <button type="button" data-act="clear">지우기</button>
+      <span style="flex:1"></span>
+      <button type="button" class="primary" data-act="done">완료</button>
+    </div>
+  </dialog>
 
-  <!-- ✅ 삭제 기능 영역 -->
-  <div class="delete-box">
-    <input type="password" id="delete_pw" placeholder="비밀번호 입력">
-    <button onclick="deleteSelected()">선택 삭제</button>
-  </div>
+  <div id="toast"></div>
 
   <script>
+    // ───────────────────────── Supabase ─────────────────────────
     const SUPABASE_URL = "https://lkltfigaylemgsehkkdg.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrbHRmaWdheWxlbWdzZWhra2RnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMDM2NzksImV4cCI6MjA3MzU3OTY3OX0.75jPhekoPJfsoeaTPSApbGVhq75ObzdYvYAXT_CBUak";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const canvas = document.getElementById("signature");
-    const ctx = canvas.getContext("2d");
-    let drawing = false;
-
-    function resizeCanvas() {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-    }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-
-    // 🖱️ 마우스
-    canvas.addEventListener("mousedown", (e) => { drawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
-    canvas.addEventListener("mousemove", (e) => { if (drawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } });
-    canvas.addEventListener("mouseup", () => drawing = false);
-    canvas.addEventListener("mouseout", () => drawing = false);
-
-    // 📱 터치
-    function getTouchPos(e) {
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      return { x: touch.pageX - rect.left, y: touch.pageY - rect.top };
-    }
-    canvas.addEventListener("touchstart", (e) => { e.preventDefault(); drawing = true; const pos = getTouchPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y); });
-    canvas.addEventListener("touchmove", (e) => { e.preventDefault(); if (drawing) { const pos = getTouchPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); } });
-    canvas.addEventListener("touchend", () => drawing = false);
-
-    function clearPad() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-
-    async function submitData() {
-      const name_kr = document.getElementById("name_kr").value.trim();
-      const name_en = document.getElementById("name_en").value.trim();
-      const affiliation_kr = document.getElementById("affiliation_kr").value.trim();
-      const affiliation_en = document.getElementById("affiliation_en").value.trim();
-      const orcid = document.getElementById("orcid").value.trim();
-      const email = document.getElementById("email").value.trim();
-      const fileInput = document.getElementById("signature_file");
-
-      if (!name_kr || !name_en || !affiliation_kr || !affiliation_en || !email) {
-        alert("필수 항목을 모두 입력하세요.");
-        return;
-      }
-
-      let blob, fileName;
-      if (fileInput.files.length > 0) {
-        blob = fileInput.files[0];
-        fileName = `${name_en.replace(/\s+/g, "_")}_${Date.now()}.png`;
-      } else {
-        const signatureData = canvas.toDataURL("image/png");
-        blob = await (await fetch(signatureData)).blob();
-        fileName = `${name_en.replace(/\s+/g, "_")}_${Date.now()}.png`;
-      }
-
-      const { error: storageError } = await supabase
-        .storage.from("signatures")
-        .upload(fileName, blob, { upsert: true });
-
-      if (storageError) {
-        alert("서명 업로드 오류: " + storageError.message);
-        return;
-      }
-
-      const signature_url = `${SUPABASE_URL}/storage/v1/object/public/signatures/${fileName}`;
-
-      const { error } = await supabase
-        .from("authors")
-        .insert([{ name_kr, name_en, affiliation_kr, affiliation_en, orcid, email, signature_url }]);
-
-      if (error) {
-        alert("DB 저장 오류: " + error.message);
-      } else {
-        alert("저장 성공! 🎉");
-        clearPad();
-        fileInput.value = "";
-        loadAuthors();
-      }
+    async function q(promise) {
+      const { data, error } = await promise;
+      if (error) throw error;
+      return data;
     }
 
-    async function loadAuthors() {
-      const { data, error } = await supabase.from("authors").select("*").order("id", { ascending: false });
-      if (error) {
-        document.getElementById("authorList").innerHTML = "데이터 불러오기 오류: " + error.message;
-        return;
-      }
-      if (!data || data.length === 0) {
-        document.getElementById("authorList").innerHTML = "<p>아직 입력된 데이터가 없습니다.</p>";
-        return;
-      }
+    const api = {
+      papers: () => q(sb.from("papers").select("id,title,note,created_at,paper_authors(id,signature_url)").order("created_at", { ascending: false })),
+      paper: (id) => q(sb.from("papers").select("*").eq("id", id).single()),
+      paperAuthors: (id) => q(sb.from("paper_authors").select("*, author:authors(*)").eq("paper_id", id).order("author_order").order("id")),
+      authors: () => q(sb.from("authors").select("*, paper_authors(count)").order("name_kr")),
+      insertPaper: (row) => q(sb.from("papers").insert(row).select().single()),
+      updatePaper: (id, patch) => q(sb.from("papers").update(patch).eq("id", id)),
+      deletePaper: (id) => q(sb.from("papers").delete().eq("id", id)),
+      insertAuthor: (row) => q(sb.from("authors").insert(row).select().single()),
+      updateAuthor: (id, patch) => q(sb.from("authors").update(patch).eq("id", id)),
+      deleteAuthor: (id) => q(sb.from("authors").delete().eq("id", id)),
+      insertPA: (row) => q(sb.from("paper_authors").insert(row).select().single()),
+      updatePA: (id, patch) => q(sb.from("paper_authors").update(patch).eq("id", id)),
+      deletePA: (id) => q(sb.from("paper_authors").delete().eq("id", id)),
+    };
 
-      let html = "<h3>이미 제출한 저자 목록</h3><table><tr><th>선택</th><th>이름(한글)</th><th>이름(영문)</th><th>소속(한글)</th><th>소속(영문)</th><th>ORCID</th><th>이메일</th><th>서명</th></tr>";
-      data.forEach(row => {
-        html += `<tr>
-          <td><input type="checkbox" class="delete-check" value="${row.id}"></td>
-          <td>${row.name_kr}</td>
-          <td>${row.name_en}</td>
-          <td>${row.affiliation_kr}</td>
-          <td>${row.affiliation_en}</td>
-          <td>${row.orcid || ""}</td>
-          <td>${row.email}</td>
-          <td><img src="${row.signature_url}" alt="signature"></td>
-        </tr>`;
+    async function uploadSignature(blob, nameEn) {
+      const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+      const slug = (nameEn || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") || "author";
+      const fileName = `${slug}_${Date.now()}.${ext}`;
+      const { error } = await sb.storage.from("signatures").upload(fileName, blob, { contentType: blob.type, upsert: true });
+      if (error) throw error;
+      return `${SUPABASE_URL}/storage/v1/object/public/signatures/${fileName}`;
+    }
+
+    // ───────────────────────── 유틸 ─────────────────────────
+    const $ = (s, root = document) => root.querySelector(s);
+    const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("ko-KR") : "");
+    const app = $("#app");
+
+    function toast(msg, isErr = false) {
+      const el = document.createElement("div");
+      el.textContent = msg;
+      if (isErr) el.className = "err";
+      $("#toast").appendChild(el);
+      setTimeout(() => el.remove(), isErr ? 5000 : 2500);
+    }
+
+    function errMsg(e) {
+      const m = e?.message || String(e);
+      if (e?.code === "PGRST205" || e?.code === "42P01" || /papers|paper_authors/.test(m) && /not find|does not exist/.test(m))
+        return "데이터베이스 테이블이 없습니다. sql/001_papers_schema.sql 을 Supabase SQL Editor에서 먼저 실행하세요.";
+      if (e?.code === "23503") return "이 저자는 논문에 연결되어 있어 삭제할 수 없습니다. 먼저 논문에서 제외하세요.";
+      return m;
+    }
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); toast("링크를 복사했습니다"); }
+      catch { prompt("아래 링크를 복사하세요", text); }
+    }
+
+    const signLink = (paperId) => `${location.origin}${location.pathname}#/sign/${paperId}`;
+
+    // ───────────────────────── 서명 패드 ─────────────────────────
+    class SignaturePad {
+      // 굵기(CSS px): 빠르게 그으면 MIN_W 쪽, 천천히 그으면 MAX_W 쪽
+      static MIN_W = 1.1;
+      static MAX_W = 3.6;
+      static SMOOTH = 0.45;      // 손떨림 보정 (0=보정 없음, 1에 가까울수록 강함)
+      static MIN_DIST = 1.5;     // 이보다 가까운 점은 건너뜀
+
+      constructor(canvas) {
+        this.c = canvas;
+        this.ctx = canvas.getContext("2d");
+        this.strokes = [];
+        this.cur = null;
+        this.raf = 0;
+        canvas.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          canvas.setPointerCapture(e.pointerId);
+          const p = this.raw(e);
+          p.w = (SignaturePad.MIN_W + SignaturePad.MAX_W) / 2;
+          p.v = 0;
+          this.cur = [p];
+          this.strokes.push(this.cur);
+          this.schedule();
+        });
+        canvas.addEventListener("pointermove", (e) => {
+          if (!this.cur) return;
+          e.preventDefault();
+          const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+          for (const ev of evs.length ? evs : [e]) this.add(this.raw(ev), ev);
+          this.schedule();
+        });
+        const end = (e) => {
+          if (!this.cur) return;
+          // 보정 때문에 남은 간격을 실제 펜 끝 위치까지 채움
+          const r = this.raw(e), last = this.cur[this.cur.length - 1];
+          if (Math.hypot(r.x - last.x, r.y - last.y) > 0.5) this.cur.push({ ...r, w: last.w, v: last.v });
+          this.cur = null;
+          this.schedule();
+        };
+        canvas.addEventListener("pointerup", end);
+        canvas.addEventListener("pointercancel", end);
+        new ResizeObserver(() => this.resize()).observe(canvas);
+      }
+      raw(e) {
+        const r = this.c.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top, t: e.timeStamp };
+      }
+      add(p, e) {
+        const S = SignaturePad, s = this.cur, last = s[s.length - 1];
+        // 손떨림 보정: 이전 점 쪽으로 살짝 끌어당김
+        p.x = last.x + (p.x - last.x) * (1 - S.SMOOTH);
+        p.y = last.y + (p.y - last.y) * (1 - S.SMOOTH);
+        const dist = Math.hypot(p.x - last.x, p.y - last.y);
+        if (dist < S.MIN_DIST) return;
+        // 속도(px/ms)를 부드럽게 → 굵기 결정
+        const v = 0.7 * (dist / Math.max(p.t - last.t, 1)) + 0.3 * last.v;
+        let w = Math.max(S.MAX_W / (v + 1), S.MIN_W);
+        if (e.pointerType === "pen" && e.pressure > 0) w = S.MIN_W + (S.MAX_W - S.MIN_W) * e.pressure;
+        p.v = v;
+        p.w = last.w * 0.6 + w * 0.4; // 굵기도 급변하지 않게
+        s.push(p);
+      }
+      schedule() {
+        if (this.raf) return;
+        this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); });
+      }
+      resize() {
+        const r = this.c.getBoundingClientRect();
+        if (!r.width) return;
+        const dpr = window.devicePixelRatio || 1;
+        this.c.width = Math.round(r.width * dpr);
+        this.c.height = Math.round(r.height * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.draw();
+      }
+      // 곡선 위에 작은 원을 촘촘히 찍어 굵기가 자연스럽게 변하는 선을 그림
+      static paint(ctx, strokes) {
+        ctx.fillStyle = "#111";
+        const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, w: (a.w + b.w) / 2 });
+        for (const s of strokes) {
+          ctx.beginPath();
+          const dot = (x, y, w) => { ctx.moveTo(x + w / 2, y); ctx.arc(x, y, w / 2, 0, Math.PI * 2); };
+          if (s.length === 1) { dot(s[0].x, s[0].y, s[0].w); ctx.fill(); continue; }
+          const p = s.length === 2 ? [s[0], mid(s[0], s[1]), s[1]] : s;
+          for (let k = 1; k < p.length - 1; k++) {
+            const a = k === 1 ? p[0] : mid(p[k - 1], p[k]);
+            const c = k === p.length - 2 ? p[k + 1] : mid(p[k], p[k + 1]);
+            const b = p[k];
+            const len = Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.x - b.x, c.y - b.y);
+            const steps = Math.max(2, Math.ceil(len / 0.6));
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps, u = 1 - t;
+              dot(u * u * a.x + 2 * u * t * b.x + t * t * c.x, u * u * a.y + 2 * u * t * b.y + t * t * c.y, a.w + (c.w - a.w) * t);
+            }
+          }
+          ctx.fill();
+        }
+      }
+      draw() {
+        const { c, ctx } = this;
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.restore();
+        SignaturePad.paint(ctx, this.strokes);
+        c.parentElement.classList.toggle("drawn", !this.isEmpty());
+      }
+      isEmpty() { return this.strokes.length === 0; }
+      clear() { this.strokes = []; this.cur = null; this.draw(); }
+      undo() { this.strokes.pop(); this.draw(); }
+      // 서명 부분만 잘라 투명 배경 PNG로 내보냄
+      toBlob() {
+        const pts = this.strokes.flat();
+        const pad = 8 + SignaturePad.MAX_W, scale = 2;
+        const minX = Math.min(...pts.map((p) => p.x)) - pad, minY = Math.min(...pts.map((p) => p.y)) - pad;
+        const w = Math.max(...pts.map((p) => p.x)) + pad - minX, h = Math.max(...pts.map((p) => p.y)) + pad - minY;
+        const out = document.createElement("canvas");
+        out.width = Math.ceil(w * scale); out.height = Math.ceil(h * scale);
+        const octx = out.getContext("2d");
+        octx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+        SignaturePad.paint(octx, this.strokes);
+        return new Promise((res) => out.toBlob(res, "image/png"));
+      }
+    }
+
+    const sigDlg = $("#sigdlg");
+    const pad = new SignaturePad($("canvas", sigDlg));
+    let sigResolve = null;
+
+    function openSignaturePad() {
+      return new Promise((resolve) => {
+        sigResolve = resolve;
+        pad.clear();
+        sigDlg.showModal();
+        requestAnimationFrame(() => pad.resize());
       });
-      html += "</table>";
+    }
+    function closeSignaturePad(result) {
+      sigDlg.close();
+      sigResolve?.(result);
+      sigResolve = null;
+    }
+    sigDlg.addEventListener("click", async (e) => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (act === "close") closeSignaturePad(null);
+      if (act === "clear") pad.clear();
+      if (act === "undo") pad.undo();
+      if (act === "done") {
+        if (pad.isEmpty()) return toast("서명을 해주세요", true);
+        closeSignaturePad(await pad.toBlob());
+      }
+    });
+    sigDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeSignaturePad(null); });
 
-      document.getElementById("authorList").innerHTML = html;
+    // 업로드한 이미지는 최대 1200px로 줄여서 저장
+    function shrinkImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const s = Math.min(1, 1200 / Math.max(img.width, img.height));
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          const type = file.type === "image/png" ? "image/png" : "image/jpeg";
+          c.toBlob(resolve, type, 0.9);
+          URL.revokeObjectURL(img.src);
+        };
+        img.onerror = () => reject(new Error("이미지를 읽을 수 없습니다"));
+        img.src = URL.createObjectURL(file);
+      });
     }
 
-    async function deleteSelected() {
-      const pw = document.getElementById("delete_pw").value;
-      if (pw !== "1111") {
-        alert("비밀번호가 올바르지 않습니다.");
-        return;
+    // ───────────────────────── 공용 대화상자 ─────────────────────────
+    const modal = $("#modal");
+    function openModal(html) {
+      modal.innerHTML = html;
+      modal.showModal();
+      modal.scrollTop = 0;
+      return modal;
+    }
+    modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) modal.close(); });
+
+    /**
+     * 저자 정보 + 서명 폼
+     * ctx.mode: "master" (저자 마스터만) | "paper" (논문 안의 저자)
+     * ctx.author: 기존 마스터 행(없으면 신규)  ctx.pa: 기존 paper_authors 행
+     */
+    function openAuthorForm(ctx) {
+      const a = ctx.author || {};
+      const pa = ctx.pa || {};
+      const inPaper = ctx.mode === "paper";
+      const affKr = inPaper && ctx.pa ? pa.affiliation_kr ?? a.affiliation_kr : a.affiliation_kr;
+      const affEn = inPaper && ctx.pa ? pa.affiliation_en ?? a.affiliation_en : a.affiliation_en;
+      const currentSig = inPaper ? pa.signature_url : a.signature_url;
+      let pending = null; // { blob } | { url } | { remove: true }
+      // 저자 본인(서명 링크)은 전부 필수, 관리자는 이름(한글)만 필수
+      const required = ctx.strict ? ["name_kr", "name_en", "affiliation_kr", "affiliation_en", "email"] : ["name_kr"];
+      const reqMark = (k) => (required.includes(k) ? `<span class="req">*</span>` : "");
+
+      const title = ctx.author ? (inPaper ? `${a.name_kr} — 정보 확인 · 서명` : "저자 정보 수정") : "새 저자 등록";
+      const dlg = openModal(`
+        <form id="authorForm" novalidate>
+          <div class="dlg-head"><h2>${esc(title)}</h2><button type="button" class="ghost icon" data-close aria-label="닫기">✕</button></div>
+          <div class="dlg-body">
+            ${inPaper && ctx.paperTitle ? `<p class="muted small" style="margin-top:0">논문: ${esc(ctx.paperTitle)}</p>` : ""}
+            ${!ctx.strict ? `<p class="muted small" style="margin-top:0">이름(한글)만 필수입니다. 나머지는 저자가 서명 링크에서 직접 입력할 수 있습니다.</p>` : ""}
+            <div class="grid2">
+              <div class="field"><label>이름 (한글) ${reqMark("name_kr")}</label><input type="text" name="name_kr" value="${esc(a.name_kr)}" autocomplete="off"></div>
+              <div class="field"><label>이름 (영문) ${reqMark("name_en")}</label><input type="text" name="name_en" value="${esc(a.name_en)}" placeholder="Gil-Dong Hong" autocomplete="off"></div>
+              <div class="field full"><label>소속 (한글) ${reqMark("affiliation_kr")}</label><textarea class="autogrow" name="affiliation_kr" rows="1">${esc(affKr)}</textarea></div>
+              <div class="field full"><label>소속 (영문) ${reqMark("affiliation_en")}</label><textarea class="autogrow" name="affiliation_en" rows="1">${esc(affEn)}</textarea></div>
+              <div class="field"><label>이메일 ${reqMark("email")}</label><input type="text" name="email" inputmode="email" value="${esc(a.email)}" autocomplete="off"></div>
+              <div class="field"><label>ORCID</label><input type="text" name="orcid" value="${esc(a.orcid)}" placeholder="0000-0000-0000-0000"></div>
+            </div>
+            ${ctx.mode === "master" ? `
+              <div class="section-label">관리자 전용 <span class="muted small">(저자 입력폼에는 보이지 않음)</span></div>
+              <div class="grid2">
+                <div class="field"><label>전화</label><input type="text" name="tel" value="${esc(a.tel)}" placeholder="+82-42-868-0000"></div>
+                <div class="field"><label>팩스</label><input type="text" name="fax" value="${esc(a.fax)}" placeholder="+82-42-868-0000"></div>
+                <div class="field full"><label>주소 (한글) <span class="muted small">교신저자용</span></label><textarea class="autogrow" name="address_ko" rows="1">${esc(a.address_ko)}</textarea></div>
+                <div class="field full"><label>주소 (영문) <span class="muted small">교신저자용</span></label><textarea class="autogrow" name="address_en" rows="1">${esc(a.address_en)}</textarea></div>
+                <div class="field"><label>원내 여부 <span class="muted small">저자동의서 내부/외부 인원</span></label>
+                  <select name="internal">
+                    <option value="" ${a.internal == null ? "selected" : ""}>미지정</option>
+                    <option value="true" ${a.internal === true ? "selected" : ""}>원내 (KIOM)</option>
+                    <option value="false" ${a.internal === false ? "selected" : ""}>외부</option>
+                  </select></div>
+                <div class="field"><label>기본 역할 <span class="muted small">저자동의서 역할 칸</span></label><input type="text" name="default_role_ko" value="${esc(a.default_role_ko)}" placeholder="자료분석, 논문작성"></div>
+              </div>` : ""}
+            <div class="field" style="margin-top:18px">
+              <label>서명</label>
+              <div class="sig-box" id="sigPreview"></div>
+              <div class="actions">
+                <button type="button" class="primary" data-sig="draw">✍️ 서명하기</button>
+                ${inPaper && a.signature_url && a.signature_url !== currentSig ? `<button type="button" data-sig="reuse">기존 서명 사용</button>` : ""}
+                <button type="button" data-sig="upload">이미지 업로드</button>
+                <button type="button" class="ghost danger" data-sig="remove">서명 지우기</button>
+                <input type="file" accept="image/*" hidden id="sigFile">
+              </div>
+            </div>
+          </div>
+          <div class="dlg-foot">
+            <button type="button" data-close>취소</button>
+            <button type="submit" class="primary">저장</button>
+          </div>
+        </form>`);
+
+      const form = $("#authorForm", dlg);
+      const preview = $("#sigPreview", dlg);
+      // 소속: 내용 길이에 맞춰 높이 자동 조절, 줄바꿈(Enter)은 막아 한 줄 값으로 유지
+      $$("textarea.autogrow", dlg).forEach((t) => {
+        const fit = () => { t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; };
+        t.addEventListener("input", () => { if (/\n/.test(t.value)) t.value = t.value.replace(/\s*\n\s*/g, " "); fit(); });
+        t.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+        requestAnimationFrame(fit);
+      });
+      let previewUrl = null;
+      function renderPreview() {
+        if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+        let src = currentSig;
+        if (pending?.blob) src = previewUrl = URL.createObjectURL(pending.blob);
+        else if (pending?.url) src = pending.url;
+        else if (pending?.remove) src = null;
+        preview.innerHTML = src ? `<img src="${esc(src)}" alt="서명">` : `<span class="muted small">서명 없음</span>`;
       }
+      renderPreview();
 
-      const checkboxes = document.querySelectorAll(".delete-check:checked");
-      if (checkboxes.length === 0) {
-        alert("삭제할 항목을 선택하세요.");
-        return;
-      }
+      dlg.addEventListener("click", async (e) => {
+        const act = e.target.closest("[data-sig]")?.dataset.sig;
+        if (!act) return;
+        if (act === "draw") {
+          const blob = await openSignaturePad();
+          if (blob) { pending = { blob }; renderPreview(); }
+        }
+        if (act === "reuse") { pending = { url: a.signature_url }; renderPreview(); }
+        if (act === "upload") $("#sigFile", dlg).click();
+        if (act === "remove") { pending = { remove: true }; renderPreview(); }
+      });
+      $("#sigFile", dlg).addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try { pending = { blob: await shrinkImage(file) }; renderPreview(); }
+        catch (err) { toast(err.message, true); }
+      });
 
-      const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(form));
+        for (const k of ["name_kr", "name_en", "affiliation_kr", "affiliation_en", "email", "orcid"]) f[k] = (f[k] || "").trim();
+        const missing = required.filter((k) => !f[k]);
+        if (missing.length) {
+          form.elements[missing[0]].focus();
+          return toast("* 표시된 항목을 모두 입력하세요", true);
+        }
+        if (!ctx.author && ctx.allAuthors) {
+          const same = (x, y) => x && y && x.toLowerCase() === y.toLowerCase();
+          const dup = ctx.allAuthors.find((x) => same(x.email, f.email) || same(x.name_en, f.name_en) || same(x.name_kr, f.name_kr));
+          if (dup && !confirm(`이미 비슷한 저자가 있습니다: ${dup.name_kr} (${dup.name_en || "-"}, ${dup.email || "-"})\n그래도 새로 등록할까요?`)) return;
+        }
+        for (const k of ["name_en", "affiliation_kr", "affiliation_en", "email", "orcid"]) f[k] = f[k] || null;
+        const submitBtn = $("button[type=submit]", form);
+        submitBtn.disabled = true; submitBtn.textContent = "저장 중…";
+        try {
+          let sigUrl = null;
+          if (pending?.blob) sigUrl = await uploadSignature(pending.blob, f.name_en);
+          if (pending?.url) sigUrl = pending.url;
+          const now = new Date().toISOString();
 
-      const { error } = await supabase.from("authors").delete().in("id", ids);
+          // 1) 저자 마스터 (최신 소속·서명을 항상 반영 → 다음 논문에 자동 적용)
+          const master = { name_kr: f.name_kr, name_en: f.name_en, email: f.email, orcid: f.orcid,
+            affiliation_kr: f.affiliation_kr, affiliation_en: f.affiliation_en, updated_at: now };
+          if (!inPaper && pending?.remove) master.signature_url = null;
+          if (sigUrl) master.signature_url = sigUrl;
+          // 관리자 전용 칸 (academic-paper-toolkit 의 author_db.py 와 공유)
+          if (ctx.mode === "master") {
+            for (const k of ["tel", "fax", "address_ko", "address_en", "default_role_ko"]) master[k] = (f[k] || "").trim() || null;
+            master.internal = f.internal === "" ? null : f.internal === "true";
+          }
 
-      if (error) {
-        alert("삭제 오류: " + error.message);
-      } else {
-        alert("선택한 항목 삭제 완료");
-        loadAuthors();
-      }
+          let authorId = a.id;
+          if (ctx.author) await api.updateAuthor(authorId, master);
+          else authorId = (await api.insertAuthor(master)).id;
+
+          // 2) 논문별 정보
+          if (inPaper) {
+            const row = { affiliation_kr: f.affiliation_kr, affiliation_en: f.affiliation_en };
+            if (sigUrl) Object.assign(row, { signature_url: sigUrl, signed_at: now });
+            if (pending?.remove) Object.assign(row, { signature_url: null, signed_at: null });
+            if (ctx.pa) await api.updatePA(pa.id, row);
+            else await api.insertPA({ ...row, paper_id: ctx.paperId, author_id: authorId, author_order: ctx.nextOrder ?? 999 });
+          }
+          modal.close();
+          toast(inPaper && sigUrl ? "서명과 정보가 저장되었습니다. 감사합니다!" : "저장되었습니다");
+          ctx.onSaved?.();
+        } catch (err) {
+          toast("저장 실패: " + errMsg(err), true);
+          submitBtn.disabled = false; submitBtn.textContent = "저장";
+        }
+      });
+      setTimeout(() => form.elements[ctx.author ? "affiliation_kr" : "name_kr"]?.focus(), 50);
     }
 
-    window.onload = loadAuthors;
+    const isIncomplete = (a) => !a.name_en || !a.affiliation_kr || !a.affiliation_en || !a.email;
+
+    // 관리자: 이름만으로 저자를 논문에 추가 (나머지는 저자가 서명 링크에서 입력)
+    function openQuickAdd(ctx) {
+      const dlg = openModal(`
+        <form id="quickForm">
+          <div class="dlg-head"><h2>새 저자 추가</h2><button type="button" class="ghost icon" data-close aria-label="닫기">✕</button></div>
+          <div class="dlg-body">
+            <p class="muted small" style="margin-top:0">이름만 넣으면 됩니다. 소속·이메일·서명은 저자가 서명 링크에서 직접 입력합니다.</p>
+            <div class="grid2">
+              <div class="field"><label>이름 (한글) <span class="req">*</span></label><input type="text" name="name_kr" value="${esc(/[가-힣]/.test(ctx.name) ? ctx.name : "")}" autocomplete="off"></div>
+              <div class="field"><label>이름 (영문)</label><input type="text" name="name_en" value="${esc(/[가-힣]/.test(ctx.name) ? "" : ctx.name)}" autocomplete="off"></div>
+            </div>
+          </div>
+          <div class="dlg-foot"><button type="button" data-close>취소</button><button type="submit" class="primary">추가</button></div>
+        </form>`);
+      const form = $("#quickForm", dlg);
+      form.elements[form.elements.name_kr.value ? "name_en" : "name_kr"].focus();
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name_kr = form.elements.name_kr.value.trim(), name_en = form.elements.name_en.value.trim() || null;
+        if (!name_kr) { form.elements.name_kr.focus(); return toast("이름(한글)을 입력하세요", true); }
+        const dup = ctx.allAuthors.find((x) => x.name_kr === name_kr || (name_en && x.name_en?.toLowerCase() === name_en.toLowerCase()));
+        if (dup && !confirm(`저자 목록에 이미 '${dup.name_kr}${dup.name_en ? " (" + dup.name_en + ")" : ""}' 님이 있습니다.
+동명이인으로 새로 추가할까요?
+
+(같은 분이면 취소 후 목록에서 이름을 클릭하세요)`)) return;
+        try {
+          const a = await api.insertAuthor({ name_kr, name_en, updated_at: new Date().toISOString() });
+          await api.insertPA({ paper_id: ctx.paperId, author_id: a.id, author_order: ctx.nextOrder });
+          modal.close();
+          toast(`${name_kr} 추가됨`);
+          ctx.onSaved();
+        } catch (err) { toast(errMsg(err), true); }
+      });
+    }
+
+    // ───────────────────────── 화면: 논문 목록 ─────────────────────────
+    async function viewPapers() {
+      const papers = await api.papers();
+      app.innerHTML = `
+        <div class="page-head">
+          <div><h1>논문</h1><p class="muted" style="margin:0">논문을 만들고 저자를 선택한 뒤, 서명 요청 링크를 공동저자들에게 보내세요.</p></div>
+          <button class="primary" id="newPaper">+ 새 논문</button>
+        </div>
+        <div class="paper-list">
+          ${papers.length ? papers.map((p) => {
+            const total = p.paper_authors.length, done = p.paper_authors.filter((x) => x.signature_url).length;
+            return `<a class="card paper-card" href="#/paper/${p.id}">
+              <div class="title">${esc(p.title)}</div>
+              <div class="meta"><span>${fmtDate(p.created_at)}</span><span>서명 ${done} / ${total}</span></div>
+              <div class="progress"><i style="width:${total ? (done / total) * 100 : 0}%"></i></div>
+            </a>`;
+          }).join("") : `<div class="card empty">아직 논문이 없습니다. <b>+ 새 논문</b>을 눌러 시작하세요.</div>`}
+        </div>`;
+      $("#newPaper").onclick = () => openPaperForm();
+    }
+
+    function openPaperForm(paper) {
+      const dlg = openModal(`
+        <form id="paperForm">
+          <div class="dlg-head"><h2>${paper ? "논문 정보 수정" : "새 논문"}</h2><button type="button" class="ghost icon" data-close aria-label="닫기">✕</button></div>
+          <div class="dlg-body">
+            <div class="field"><label>논문 제목 <span class="req">*</span></label><textarea name="title" rows="3">${esc(paper?.title)}</textarea></div>
+            <div class="field" style="margin-top:12px"><label>메모 <span class="muted">(투고 저널 등, 선택)</span></label><input type="text" name="note" value="${esc(paper?.note)}"></div>
+          </div>
+          <div class="dlg-foot"><button type="button" data-close>취소</button><button type="submit" class="primary">${paper ? "저장" : "만들기"}</button></div>
+        </form>`);
+      $("textarea", dlg).focus();
+      $("#paperForm", dlg).addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const title = e.target.title.value.trim(), note = e.target.note.value.trim() || null;
+        if (!title) return toast("제목을 입력하세요", true);
+        try {
+          if (paper) { await api.updatePaper(paper.id, { title, note }); modal.close(); route(); }
+          else { const p = await api.insertPaper({ title, note }); modal.close(); location.hash = `#/paper/${p.id}`; }
+        } catch (err) { toast(errMsg(err), true); }
+      });
+    }
+
+    // ───────────────────────── 화면: 논문 상세(관리) ─────────────────────────
+    async function viewPaper(id) {
+      const [paper, pas, authors] = await Promise.all([api.paper(id), api.paperAuthors(id), api.authors()]);
+      const inPaper = new Set(pas.map((x) => x.author_id));
+      const candidates = authors.filter((a) => !inPaper.has(a.id));
+      const done = pas.filter((x) => x.signature_url).length;
+
+      app.innerHTML = `
+        <a class="back" href="#/">← 논문 목록</a>
+        <div class="page-head">
+          <div>
+            <h1>${esc(paper.title)}</h1>
+            <p class="muted" style="margin:0">${paper.note ? esc(paper.note) + " · " : ""}서명 ${done} / ${pas.length}</p>
+          </div>
+          <div class="actions">
+            <button class="ghost" id="editPaper">수정</button>
+            <button class="ghost danger" id="delPaper">삭제</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>📨 서명 요청</h2>
+          <p class="muted small" style="margin-top:-6px">이 링크를 공동저자들에게 보내면, 자기 이름을 눌러 정보를 확인·수정하고 서명할 수 있습니다.</p>
+          <div class="actions">
+            <button class="primary" id="copyLink">링크 복사</button>
+            <a class="btn" href="#/sign/${paper.id}">서명 화면 열기</a>
+            <a class="btn" href="#/paper/${paper.id}/print">인쇄용 표</a>
+            <button id="csv">CSV 내보내기</button>
+          </div>
+        </div>
+
+        <div class="card flush">
+          <div style="padding:16px 16px 4px"><h2 style="margin:0">저자 (${pas.length})</h2></div>
+          <div id="paList">
+            ${pas.length ? pas.map((x, i) => `
+              <div class="author-row" data-pa="${x.id}">
+                <div class="num">${i + 1}</div>
+                <div class="info">
+                  <div class="name">${esc(x.author.name_kr)} <span class="muted" style="font-weight:400">${esc(x.author.name_en)}</span>
+                    ${x.is_corresponding ? `<span class="badge star">교신</span>` : ""}
+                    ${x.signature_url ? `<span class="badge ok">서명 완료</span>` : `<span class="badge wait">서명 대기</span>`}</div>
+                  <div class="sub">${isIncomplete(x.author) ? "정보 미입력 — 서명 링크로 저자에게 받으세요" : `${esc(x.affiliation_kr || x.author.affiliation_kr)} · ${esc(x.author.email)}`}</div>
+                </div>
+                <div class="sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : ""}</div>
+                <div class="ctl">
+                  <button class="ghost icon" data-act="up" title="위로" ${i === 0 ? "disabled" : ""}>▲</button>
+                  <button class="ghost icon" data-act="down" title="아래로" ${i === pas.length - 1 ? "disabled" : ""}>▼</button>
+                  <button class="ghost icon" data-act="corr" title="교신저자 지정/해제">${x.is_corresponding ? "★" : "☆"}</button>
+                  <button class="ghost icon" data-act="edit" title="정보·서명">✏️</button>
+                  <button class="ghost icon danger" data-act="remove" title="논문에서 제외">✕</button>
+                </div>
+              </div>`).join("") : `<div class="empty">아래에서 저자를 선택해 추가하세요.</div>`}
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>➕ 저자 추가</h2>
+          <input type="search" id="authorSearch" placeholder="이름, 소속, 이메일로 검색">
+          <div class="chips" id="chips"></div>
+        </div>`;
+
+      const reload = () => viewPaper(id);
+      const nextOrder = () => (pas.length ? Math.max(...pas.map((x) => x.author_order)) + 1 : 1);
+
+      function renderChips() {
+        const term = $("#authorSearch").value.trim().toLowerCase();
+        const list = candidates.filter((a) => !term || [a.name_kr, a.name_en, a.affiliation_kr, a.affiliation_en, a.email].some((v) => v?.toLowerCase().includes(term)));
+        $("#chips").innerHTML =
+          list.map((a) => `<button class="chip" data-add="${a.id}" title="${esc(a.affiliation_kr)}">${esc(a.name_kr)}<span class="en">${esc(a.name_en)}</span></button>`).join("") +
+          `<button class="chip add" data-new>${term && !list.length ? `+ '${esc($("#authorSearch").value.trim())}' 새 저자로 추가` : "+ 새 저자 등록"}</button>`;
+      }
+      renderChips();
+      $("#authorSearch").oninput = renderChips;
+
+      $("#chips").onclick = async (e) => {
+        if (e.target.closest("[data-new]")) {
+          return openQuickAdd({ paperId: id, name: $("#authorSearch").value.trim(), nextOrder: nextOrder(), allAuthors: authors, onSaved: reload });
+        }
+        const btn = e.target.closest("[data-add]");
+        if (!btn) return;
+        btn.disabled = true;
+        const a = authors.find((x) => x.id === +btn.dataset.add);
+        try {
+          await api.insertPA({ paper_id: id, author_id: a.id, author_order: nextOrder(), affiliation_kr: a.affiliation_kr, affiliation_en: a.affiliation_en });
+          toast(`${a.name_kr} 추가됨`);
+          reload();
+        } catch (err) { toast(errMsg(err), true); btn.disabled = false; }
+      };
+
+      $("#paList").onclick = async (e) => {
+        const act = e.target.closest("[data-act]")?.dataset.act;
+        if (!act) return;
+        const idx = pas.findIndex((x) => x.id === +e.target.closest("[data-pa]").dataset.pa);
+        const x = pas[idx];
+        try {
+          if (act === "up" || act === "down") {
+            const order = [...pas];
+            const j = act === "up" ? idx - 1 : idx + 1;
+            [order[idx], order[j]] = [order[j], order[idx]];
+            await Promise.all(order.map((r, k) => (r.author_order !== k + 1 ? api.updatePA(r.id, { author_order: k + 1 }) : null)));
+            reload();
+          }
+          if (act === "corr") { await api.updatePA(x.id, { is_corresponding: !x.is_corresponding }); reload(); }
+          if (act === "edit") openAuthorForm({ mode: "paper", author: x.author, pa: x, paperTitle: paper.title, onSaved: reload });
+          if (act === "remove") {
+            if (!confirm(`${x.author.name_kr} 님을 이 논문에서 제외할까요?\n(이 논문의 서명도 함께 삭제됩니다. 저자 기본 정보는 남습니다.)`)) return;
+            await api.deletePA(x.id); toast("제외했습니다"); reload();
+          }
+        } catch (err) { toast(errMsg(err), true); }
+      };
+
+      $("#copyLink").onclick = () => copyText(signLink(paper.id));
+      $("#csv").onclick = () => downloadCsv(paper, pas);
+      $("#editPaper").onclick = () => openPaperForm(paper);
+      $("#delPaper").onclick = async () => {
+        if (!confirm(`이 논문을 삭제할까요?\n\n${paper.title}\n\n논문별 저자 연결과 서명 기록이 삭제됩니다. (저자 기본 정보는 남습니다)`)) return;
+        try { await api.deletePaper(paper.id); toast("삭제했습니다"); location.hash = "#/"; }
+        catch (err) { toast(errMsg(err), true); }
+      };
+    }
+
+    function downloadCsv(paper, pas) {
+      const head = ["순서", "이름(한글)", "이름(영문)", "소속(한글)", "소속(영문)", "ORCID", "이메일", "교신저자", "서명일", "서명 이미지"];
+      const rows = pas.map((x, i) => [i + 1, x.author.name_kr, x.author.name_en, x.affiliation_kr || x.author.affiliation_kr, x.affiliation_en || x.author.affiliation_en,
+        x.author.orcid, x.author.email, x.is_corresponding ? "Y" : "", fmtDate(x.signed_at), x.signature_url]);
+      const csv = [head, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+      a.download = `authors_${paper.id}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // ───────────────────────── 화면: 인쇄용 표 ─────────────────────────
+    async function viewPrint(id) {
+      const [paper, pas] = await Promise.all([api.paper(id), api.paperAuthors(id)]);
+      app.innerHTML = `
+        <div class="no-print" style="margin-bottom:16px">
+          <a class="back" href="#/paper/${id}">← 논문으로</a>
+          <div class="actions"><button class="primary" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button></div>
+        </div>
+        <div class="card">
+          <h1 style="font-size:17px;margin-bottom:12px">${esc(paper.title)}</h1>
+          <div class="table-scroll">
+          <table class="print-table">
+            <tr><th>No</th><th>이름</th><th>소속</th><th>ORCID</th><th>이메일</th><th>서명</th><th>서명일</th></tr>
+            ${pas.map((x, i) => `<tr>
+              <td class="c">${i + 1}${x.is_corresponding ? "*" : ""}</td>
+              <td>${esc(x.author.name_kr)}<br><span class="muted">${esc(x.author.name_en)}</span></td>
+              <td>${esc(x.affiliation_kr || x.author.affiliation_kr)}<br><span class="muted">${esc(x.affiliation_en || x.author.affiliation_en)}</span></td>
+              <td>${esc(x.author.orcid)}</td>
+              <td>${esc(x.author.email)}</td>
+              <td class="c">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : ""}</td>
+              <td class="c">${fmtDate(x.signed_at)}</td>
+            </tr>`).join("")}
+          </table>
+          </div>
+          ${pas.some((x) => x.is_corresponding) ? `<p class="small muted">* 교신저자</p>` : ""}
+        </div>`;
+    }
+
+    // ───────────────────────── 화면: 공동저자 서명 ─────────────────────────
+    async function viewSign(id) {
+      const [paper, pas] = await Promise.all([api.paper(id), api.paperAuthors(id)]);
+      const reload = () => viewSign(id);
+      app.innerHTML = `
+        <div class="card">
+          <p class="muted small" style="margin:0 0 4px">저자 정보 확인 및 서명 요청</p>
+          <h1>${esc(paper.title)}</h1>
+        </div>
+        <div class="card flush">
+          <div style="padding:16px 16px 8px">
+            <h2 style="margin-bottom:4px">저자 정보 (${pas.length}명)</h2>
+            <p class="muted small" style="margin:0">본인 정보를 확인하고, 바뀐 내용(소속 등)이 있거나 서명이 필요하면 <b>수정·서명</b>을 눌러주세요.</p>
+          </div>
+          <div class="sign-head"><span>No</span><span>이름</span><span>소속</span><span>이메일 · ORCID</span><span>서명</span><span></span></div>
+          <div id="names">
+            ${pas.map((x, i) => {
+              const a = x.author, todo = !x.signature_url || isIncomplete(a);
+              const dash = `<span class="muted">—</span>`;
+              return `
+              <div class="sign-row" data-pa="${x.id}">
+                <div class="c-no">${i + 1}${x.is_corresponding ? `<span class="badge star" style="margin-left:4px">교신</span>` : ""}</div>
+                <div class="c-name"><b>${esc(a.name_kr)}</b><br><span class="muted">${a.name_en ? esc(a.name_en) : dash}</span></div>
+                <div class="c-aff">${x.affiliation_kr || a.affiliation_kr ? esc(x.affiliation_kr || a.affiliation_kr) : dash}<br><span class="muted">${x.affiliation_en || a.affiliation_en ? esc(x.affiliation_en || a.affiliation_en) : ""}</span></div>
+                <div class="c-mail">${a.email ? esc(a.email) : dash}${a.orcid ? `<br><span class="muted">ORCID ${esc(a.orcid)}</span>` : ""}</div>
+                <div class="c-sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : `<span class="badge wait">${isIncomplete(a) ? "정보·서명 필요" : "서명 필요"}</span>`}</div>
+                <div class="c-act"><button class="${todo ? "primary" : ""}" data-edit>${todo ? "입력·서명" : "수정·서명"}</button></div>
+              </div>`;
+            }).join("")}
+          </div>
+          <div style="padding:12px 16px"><button class="ghost" id="notListed">+ 목록에 제 이름이 없어요</button></div>
+        </div>`;
+      $("#names").onclick = (e) => {
+        const btn = e.target.closest("[data-pa]");
+        if (!btn) return;
+        const x = pas.find((p) => p.id === +btn.dataset.pa);
+        openAuthorForm({ mode: "paper", strict: true, author: x.author, pa: x, paperTitle: paper.title, onSaved: reload });
+      };
+      $("#notListed").onclick = async () => {
+        const all = await api.authors();
+        openAuthorForm({ mode: "paper", strict: true, paperId: id, paperTitle: paper.title, allAuthors: all,
+          nextOrder: pas.length ? Math.max(...pas.map((x) => x.author_order)) + 1 : 1, onSaved: reload });
+      };
+    }
+
+    // ───────────────────────── 화면: 저자 관리 ─────────────────────────
+    async function viewAuthors() {
+      const authors = await api.authors();
+      app.innerHTML = `
+        <div class="page-head">
+          <div><h1>저자 관리</h1><p class="muted" style="margin:0">여기 저장된 정보가 새 논문에 저자를 추가할 때 자동으로 채워집니다.</p></div>
+          <button class="primary" id="newAuthor">+ 새 저자</button>
+        </div>
+        <div class="card" style="padding:12px"><input type="search" id="search" placeholder="이름, 소속, 이메일로 검색"></div>
+        <div class="card flush" id="list"></div>`;
+
+      const render = () => {
+        const term = $("#search").value.trim().toLowerCase();
+        const list = authors.filter((a) => !term || [a.name_kr, a.name_en, a.affiliation_kr, a.affiliation_en, a.email].some((v) => v?.toLowerCase().includes(term)));
+        $("#list").innerHTML = list.length ? list.map((a) => {
+          const used = a.paper_authors?.[0]?.count ?? 0;
+          return `<div class="author-row" data-id="${a.id}">
+            <div class="info">
+              <div class="name">${esc(a.name_kr)} <span class="muted" style="font-weight:400">${esc(a.name_en)}</span> <span class="badge star">논문 ${used}</span></div>
+              <div class="sub">${isIncomplete(a) ? "정보 미입력" : esc(a.affiliation_kr) + (a.affiliation_en ? " / " + esc(a.affiliation_en) : "")}</div>
+              <div class="sub">${[a.email && esc(a.email), a.orcid && "ORCID " + esc(a.orcid), a.tel && "☎ " + esc(a.tel)].filter(Boolean).join(" · ")}</div>
+            </div>
+            <div class="sig">${a.signature_url ? `<img src="${esc(a.signature_url)}" alt="서명">` : `<span class="muted small">서명 없음</span>`}</div>
+            <div class="ctl">
+              <button class="ghost icon" data-act="edit" title="수정">✏️</button>
+              <button class="ghost icon danger" data-act="del" title="${used ? "논문에 연결되어 있어 삭제할 수 없습니다" : "삭제"}" ${used ? "disabled" : ""}>🗑</button>
+            </div>
+          </div>`;
+        }).join("") : `<div class="empty">저자가 없습니다.</div>`;
+      };
+      render();
+      $("#search").oninput = render;
+      $("#newAuthor").onclick = () => openAuthorForm({ mode: "master", allAuthors: authors, onSaved: viewAuthors });
+      $("#list").onclick = async (e) => {
+        const act = e.target.closest("[data-act]")?.dataset.act;
+        if (!act) return;
+        const a = authors.find((x) => x.id === +e.target.closest("[data-id]").dataset.id);
+        if (act === "edit") openAuthorForm({ mode: "master", author: a, onSaved: viewAuthors });
+        if (act === "del") {
+          if (!confirm(`${a.name_kr} (${a.name_en}) 님을 삭제할까요?`)) return;
+          try { await api.deleteAuthor(a.id); toast("삭제했습니다"); viewAuthors(); }
+          catch (err) { toast(errMsg(err), true); }
+        }
+      };
+    }
+
+    // ───────────────────────── 라우터 ─────────────────────────
+    async function route() {
+      const parts = (location.hash.replace(/^#\/?/, "") || "").split("/").filter(Boolean);
+      const [page, rawId, sub] = parts;
+      const id = Number(rawId);
+      document.body.dataset.mode = page === "sign" ? "sign" : "admin";
+      $$(".topbar nav a").forEach((a) => a.classList.toggle("active", a.dataset.nav === (page === "authors" ? "authors" : "papers")));
+      if (modal.open) modal.close();
+      window.scrollTo(0, 0);
+      try {
+        if (page === "paper" && id) await (sub === "print" ? viewPrint(id) : viewPaper(id));
+        else if (page === "sign" && id) await viewSign(id);
+        else if (page === "authors") await viewAuthors();
+        else await viewPapers();
+      } catch (err) {
+        app.innerHTML = `<div class="card"><h2>불러오지 못했습니다</h2><p class="muted">${esc(errMsg(err))}</p><a class="btn" href="#/">처음으로</a></div>`;
+      }
+    }
+    // 서명 파일이 없어졌을 때 깨진 이미지 대신 안내 표시
+    document.addEventListener("error", (e) => {
+      if (e.target.tagName !== "IMG") return;
+      const s = document.createElement("span");
+      s.className = "muted small";
+      s.textContent = "이미지 없음";
+      e.target.replaceWith(s);
+    }, true);
+    window.addEventListener("hashchange", route);
+    route();
   </script>
 </body>
 </html>
-
-
-
-
-
-
