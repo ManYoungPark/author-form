@@ -132,14 +132,15 @@
     .chip.add { border-style: dashed; color: var(--accent); font-weight: 600; }
 
     /* 서명 화면 이름 버튼 */
-    .sign-head, .sign-row { display: grid; grid-template-columns: 52px 1.1fr 1.6fr 1.4fr 110px 100px; gap: 12px; align-items: center; padding: 10px 16px; }
+    .sign-head, .sign-row { display: grid; grid-template-columns: 52px 1.1fr 1.6fr 1.4fr 110px 130px; gap: 12px; align-items: center; padding: 10px 16px; }
     .sign-head { font-size: 12px; font-weight: 700; color: var(--muted); background: #f9fafb; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
     .sign-row { border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.45; cursor: pointer; word-break: break-word; }
     .sign-row:hover { background: #f9fafb; }
     .sign-row .muted { font-size: 13px; }
     .sign-row .c-sig { height: 44px; display: flex; align-items: center; }
     .sign-row .c-sig img { max-width: 110px; max-height: 44px; }
-    .sign-row .c-act { text-align: right; }
+    .sign-row .c-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .sign-row .c-act .badge { cursor: default; }
     .sign-row .c-no { font-weight: 700; color: var(--muted); }
 
     /* 서명 위젯(폼 안) */
@@ -671,6 +672,10 @@
             const row = { affiliation_kr: f.affiliation_kr, affiliation_en: f.affiliation_en };
             if (sigUrl) Object.assign(row, { signature_url: sigUrl, signed_at: now });
             if (pending?.remove) Object.assign(row, { signature_url: null, signed_at: null });
+            // 확인 완료 후 내용이 바뀌면 확인 표시를 지워 다시 확인받음
+            const changed = pending || f.affiliation_kr !== (affKr || null) || f.affiliation_en !== (affEn || null)
+              || ["name_kr", "name_en", "email", "orcid"].some((k) => f[k] !== (a[k] || null));
+            if (changed && pa.confirmed_at) row.confirmed_at = null;
             if (ctx.pa) await api.updatePA(pa.id, row);
             else await api.insertPA({ ...row, paper_id: ctx.paperId, author_id: authorId, author_order: ctx.nextOrder ?? 999 });
           }
@@ -771,13 +776,14 @@
       const inPaper = new Set(pas.map((x) => x.author_id));
       const candidates = authors.filter((a) => !inPaper.has(a.id));
       const done = pas.filter((x) => x.signature_url).length;
+      const confirmed = pas.filter((x) => x.confirmed_at).length;
 
       app.innerHTML = `
         <a class="back" href="#/">← 논문 목록</a>
         <div class="page-head">
           <div>
             <h1>${esc(paper.title)}</h1>
-            <p class="muted" style="margin:0">${paper.note ? esc(paper.note) + " · " : ""}서명 ${done} / ${pas.length}</p>
+            <p class="muted" style="margin:0">${paper.note ? esc(paper.note) + " · " : ""}서명 ${done} / ${pas.length} · 본인 확인 ${confirmed} / ${pas.length}</p>
           </div>
           <div class="actions">
             <button class="ghost" id="editPaper">수정</button>
@@ -805,7 +811,8 @@
                 <div class="info">
                   <div class="name">${esc(x.author.name_kr)} <span class="muted" style="font-weight:400">${esc(x.author.name_en)}</span>
                     ${x.is_corresponding ? `<span class="badge star">교신</span>` : ""}
-                    ${x.signature_url ? `<span class="badge ok">서명 완료</span>` : `<span class="badge wait">서명 대기</span>`}</div>
+                    ${x.signature_url ? `<span class="badge ok">서명 완료</span>` : `<span class="badge wait">서명 대기</span>`}
+                    ${x.confirmed_at ? `<span class="badge ok" title="${esc(new Date(x.confirmed_at).toLocaleString("ko-KR"))}">✓ 본인 확인 ${fmtDate(x.confirmed_at)}</span>` : `<span class="badge wait">확인 대기</span>`}</div>
                   <div class="sub">${isIncomplete(x.author) ? "정보 미입력 — 서명 링크로 저자에게 받으세요" : `${esc(x.affiliation_kr || x.author.affiliation_kr)} · ${esc(x.author.email)}`}</div>
                 </div>
                 <div class="sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : ""}</div>
@@ -887,9 +894,9 @@
     }
 
     function downloadCsv(paper, pas) {
-      const head = ["순서", "이름(한글)", "이름(영문)", "소속(한글)", "소속(영문)", "ORCID", "이메일", "교신저자", "서명일", "서명 이미지"];
+      const head = ["순서", "이름(한글)", "이름(영문)", "소속(한글)", "소속(영문)", "ORCID", "이메일", "교신저자", "서명일", "본인 확인일", "서명 이미지"];
       const rows = pas.map((x, i) => [i + 1, x.author.name_kr, x.author.name_en, x.affiliation_kr || x.author.affiliation_kr, x.affiliation_en || x.author.affiliation_en,
-        x.author.orcid, x.author.email, x.is_corresponding ? "Y" : "", fmtDate(x.signed_at), x.signature_url]);
+        x.author.orcid, x.author.email, x.is_corresponding ? "Y" : "", fmtDate(x.signed_at), fmtDate(x.confirmed_at), x.signature_url]);
       const csv = [head, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
@@ -938,7 +945,7 @@
         <div class="card flush">
           <div style="padding:16px 16px 8px">
             <h2 style="margin-bottom:4px">저자 정보 (${pas.length}명)</h2>
-            <p class="muted small" style="margin:0">본인 정보를 확인하고, 바뀐 내용(소속 등)이 있거나 서명이 필요하면 <b>수정·서명</b>을 눌러주세요.</p>
+            <p class="muted small" style="margin:0">본인 정보를 확인하고, 바뀐 내용(소속 등)이 있거나 서명이 필요하면 <b>수정·서명</b>을 눌러주세요. 모두 맞으면 <b>✓ 확인 완료</b>를 눌러주세요.</p>
           </div>
           <div class="sign-head"><span>No</span><span>이름</span><span>소속</span><span>이메일 · ORCID</span><span>서명</span><span></span></div>
           <div id="names">
@@ -952,16 +959,27 @@
                 <div class="c-aff">${x.affiliation_kr || a.affiliation_kr ? esc(x.affiliation_kr || a.affiliation_kr) : dash}<br><span class="muted">${x.affiliation_en || a.affiliation_en ? esc(x.affiliation_en || a.affiliation_en) : ""}</span></div>
                 <div class="c-mail">${a.email ? esc(a.email) : dash}${a.orcid ? `<br><span class="muted">ORCID ${esc(a.orcid)}</span>` : ""}</div>
                 <div class="c-sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : `<span class="badge wait">${isIncomplete(a) ? "정보·서명 필요" : "서명 필요"}</span>`}</div>
-                <div class="c-act"><button class="${todo ? "primary" : ""}" data-edit>${todo ? "입력·서명" : "수정·서명"}</button></div>
+                <div class="c-act">
+                  <button class="${todo ? "primary" : ""}" data-edit>${todo ? "입력·서명" : "수정·서명"}</button>
+                  ${x.confirmed_at ? `<span class="badge ok" title="${esc(new Date(x.confirmed_at).toLocaleString("ko-KR"))}">✓ 확인 완료 ${fmtDate(x.confirmed_at)}</span>`
+                    : todo ? "" : `<button class="primary" data-confirm>✓ 확인 완료</button>`}
+                </div>
               </div>`;
             }).join("")}
           </div>
           <div style="padding:12px 16px"><button class="ghost" id="notListed">+ 목록에 제 이름이 없어요</button></div>
         </div>`;
-      $("#names").onclick = (e) => {
+      $("#names").onclick = async (e) => {
         const btn = e.target.closest("[data-pa]");
         if (!btn) return;
         const x = pas.find((p) => p.id === +btn.dataset.pa);
+        if (e.target.closest(".c-act .badge")) return;
+        if (e.target.closest("[data-confirm]")) {
+          if (!confirm(`${x.author.name_kr} 님 본인이 맞으신가요?\n\n표시된 이름·소속·이메일·서명을 확인했고, 이대로 제출하는 데 동의합니다.`)) return;
+          try { await api.updatePA(x.id, { confirmed_at: new Date().toISOString() }); toast("확인 완료되었습니다. 감사합니다!"); reload(); }
+          catch (err) { toast("저장 실패: " + errMsg(err), true); }
+          return;
+        }
         openAuthorForm({ mode: "paper", strict: true, author: x.author, pa: x, paperTitle: paper.title, onSaved: reload });
       };
       $("#notListed").onclick = async () => {
