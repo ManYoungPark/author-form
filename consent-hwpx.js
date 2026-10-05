@@ -13,9 +13,26 @@
   // 모든 자손 (ElementTree 의 iter / findall(".//hp:tag"))
   const desc = (el, tag) => Array.from(el.getElementsByTagNameNS(HP, tag));
 
-  // 셀 안의 글자칸에 값을 넣음 (첫 칸에 넣고 나머지는 비움)
+  // 셀 안의 글자칸에 값을 넣음 (첫 칸에 넣고 나머지는 비움).
+  // 템플릿의 아래쪽 저자 줄은 글자칸(hp:t)이 아예 없는 빈 셀이라 없으면 만들어 넣음.
   function setCellText(cell, text) {
-    desc(cell, "t").forEach((t, i) => { t.textContent = i === 0 ? text : ""; });
+    const ts = desc(cell, "t");
+    if (!ts.length) {
+      const run = desc(cell, "run")[0];
+      if (!run) return;
+      const t = run.ownerDocument.createElementNS(HP, "hp:t");
+      run.appendChild(t);
+      ts.push(t);
+    }
+    ts.forEach((t, i) => { t.textContent = i === 0 ? text : ""; });
+  }
+
+  // 셀 글자 모양(문단·글자 스타일)을 기준 셀과 같게 맞춤
+  function copyCellStyle(from, to) {
+    const fp = desc(from, "p")[0], tp = desc(to, "p")[0];
+    const fr = fp && kids(fp, "run")[0], tr = tp && kids(tp, "run")[0];
+    if (fp && tp) tp.setAttribute("paraPrIDRef", fp.getAttribute("paraPrIDRef"));
+    if (fr && tr) tr.setAttribute("charPrIDRef", fr.getAttribute("charPrIDRef"));
   }
 
   function createPic(doc, picId, imgRef, width, height) {
@@ -121,10 +138,12 @@
 
     // 4. 저자 표 (7번 줄부터)
     let picId = 10001;
+    const firstRowCells = kids(rows[7], "tc"); // 첫 저자 줄: 글자 모양 기준
     authors.forEach((a, idx) => {
       const r = 7 + idx;
       if (r >= rows.length) return;
       const cells = kids(rows[r], "tc");
+      if (idx > 0) for (let c = 0; c < 5; c++) copyCellStyle(firstRowCells[c], cells[c]);
       setCellText(cells[0], a.role_type || "");
       setCellText(cells[1], a.affiliation || "");
       setCellText(cells[2], a.name);
