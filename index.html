@@ -17,6 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="consent-hwpx.js"></script>
+  <script src="manuscript-parser.js"></script>
   <style>
     :root {
       color-scheme: light only;
@@ -142,6 +143,14 @@
     .sign-row .muted { font-size: 13px; }
     .sign-row .c-sig { height: 44px; display: flex; align-items: center; }
     .sign-row .c-sig img { max-width: 110px; max-height: 44px; }
+    /* 새 논문: 원고에서 불러오기 */
+    .import-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px; margin-bottom: 14px; border: 1px dashed #c5ccd8; border-radius: 10px; background: #fcfcfd; }
+    .import-preview { margin: -4px 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f9fafb; }
+    .import-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 14px; }
+    .import-row .pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .import-row select { font-size: 13px; padding: 5px 8px; }
+    .import-row select.warn { border-color: var(--warn); background: var(--warn-weak); }
+    @media (max-width: 640px) { .import-row { grid-template-columns: 18px 1fr; } .import-row select { grid-column: 2; } }
     .paper-meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
     .paper-meta dt { color: var(--muted); font-weight: 600; white-space: nowrap; }
     .paper-meta dd { margin: 0; white-space: pre-line; word-break: break-word; }
@@ -787,6 +796,12 @@
         <form id="paperForm">
           <div class="dlg-head"><h2>${paper ? "논문 정보 수정" : "새 논문"}</h2><button type="button" class="ghost icon" data-close aria-label="닫기">✕</button></div>
           <div class="dlg-body">
+            ${paper ? "" : `<div class="import-box">
+              <button type="button" id="importBtn">📎 원고에서 불러오기 (.docx / .pdf)</button>
+              <span class="muted small">제목·저자·감사의 글을 채웁니다. 파일은 이 브라우저 안에서만 읽습니다.</span>
+              <input type="file" id="importFile" accept=".docx,.pdf" hidden>
+            </div>
+            <div id="importResult"></div>`}
             <div class="field"><label>논문 제목 <span class="req">*</span></label><textarea name="title" rows="3">${esc(paper?.title)}</textarea></div>
             <div class="field" style="margin-top:12px"><label>투고 저널명</label>
               <select id="journalPreset" style="margin-bottom:6px">
@@ -810,16 +825,101 @@
       jInput.oninput = () => { const i = journals.indexOf(jInput.value.trim()); jPreset.value = i < 0 ? "" : String(i); };
       const preset = $("#ackPreset", dlg);
       if (preset) preset.onchange = () => { if (preset.value !== "") dlg.querySelector("[name=acknowledgement]").value = acks[+preset.value]; };
+
+      // 원고에서 불러오기: 제목·감사의 글을 채우고, 저자는 미리보기 목록에서 확인 후 논문과 함께 추가
+      let imported = null; // { db: 저자 DB, rows: [{ parsed, authorId, role }] }
+      if (!paper) {
+        $("#importBtn", dlg).onclick = () => $("#importFile", dlg).click();
+        $("#importFile", dlg).onchange = async (e) => {
+          const file = e.target.files[0];
+          e.target.value = "";
+          if (!file) return;
+          const box = $("#importResult", dlg);
+          box.innerHTML = `<p class="muted small">원고를 읽는 중…</p>`;
+          try {
+            if (/\.pdf$/i.test(file.name)) await loadPdfJs();
+            const [r, db] = await Promise.all([ManuscriptParser.readManuscript(file), imported?.db || api.authors()]);
+            if (r.title) dlg.querySelector("[name=title]").value = r.title;
+            if (r.ack) dlg.querySelector("[name=acknowledgement]").value = r.ack;
+            const roleFor = (a, i) => {
+              const first = i === 0 || a.equal;
+              return first && a.corresponding ? "제1저자, 교신저자" : first ? "제1저자" : a.corresponding ? "교신저자" : "공동저자";
+            };
+            let rows = r.authors.map((a, i) => ({ parsed: a.name, authorId: ManuscriptParser.matchAuthor(a, db)?.id || "", role: roleFor(a, i) }));
+            let guessed = false;
+            if (!rows.length) {
+              guessed = true;
+              rows = ManuscriptParser.guessAuthorsFromDb(r.top, db).map((a, i) => ({ parsed: a.name_en || a.name_kr, authorId: a.id, role: i === 0 ? "제1저자" : "공동저자" }));
+            }
+            imported = { db, rows };
+            renderImport(box, r, guessed);
+          } catch (err) {
+            box.innerHTML = `<p class="small" style="color:var(--danger)">원고를 읽지 못했습니다: ${esc(errMsg(err))}</p>`;
+          }
+        };
+      }
+      function renderImport(box, r, guessed) {
+        const { db, rows } = imported;
+        const options = (sel) => `<option value="">— 추가 안 함 (DB에 없음) —</option>` +
+          db.map((a) => `<option value="${a.id}" ${a.id === sel ? "selected" : ""}>${esc(a.name_kr)} ${a.name_en ? "(" + esc(a.name_en) + ")" : ""}</option>`).join("");
+        const missed = [!r.title && "제목", !r.ack && "감사의 글"].filter(Boolean);
+        box.innerHTML = `
+          <div class="import-preview">
+            <div class="small" style="margin-bottom:6px"><b>불러온 저자 ${rows.length}명</b>
+              ${guessed ? `<span class="badge wait">저자 줄을 못 찾아 DB 이름으로 추정</span>` : ""}
+              ${missed.length ? `<span class="muted"> · ${missed.join(", ")}은(는) 찾지 못했습니다</span>` : ""}</div>
+            ${rows.length ? rows.map((x, i) => `
+              <div class="import-row" data-i="${i}">
+                <span class="muted">${i + 1}</span>
+                <span class="pname" title="원고에 적힌 이름">${esc(x.parsed)}</span>
+                <select data-k="authorId" class="${x.authorId ? "" : "warn"}">${options(x.authorId)}</select>
+                <select data-k="role">${AUTHOR_ROLES.map((ro) => `<option ${ro === x.role ? "selected" : ""}>${ro}</option>`).join("")}</select>
+              </div>`).join("") : `<p class="muted small">저자를 찾지 못했습니다. 논문을 만든 뒤 직접 추가하세요.</p>`}
+            ${rows.some((x) => !x.authorId) ? `<p class="muted small" style="margin:6px 0 0">'추가 안 함'인 저자는 빼고 만듭니다. DB에 없는 저자는 논문을 만든 뒤 <b>저자 추가</b>에서 등록하세요.</p>` : ""}
+          </div>`;
+        box.onchange = (e) => {
+          const row = e.target.closest("[data-i]");
+          if (!row) return;
+          imported.rows[+row.dataset.i][e.target.dataset.k] = e.target.dataset.k === "authorId" ? (+e.target.value || "") : e.target.value;
+          e.target.classList.toggle("warn", e.target.dataset.k === "authorId" && !e.target.value);
+        };
+      }
+
       $("#paperForm", dlg).addEventListener("submit", async (e) => {
         e.preventDefault();
         const val = (k) => e.target[k].value.trim() || null;
         const row = { title: val("title"), journal: val("journal"), acknowledgement: val("acknowledgement"), note: val("note") };
         if (!row.title) return toast("제목을 입력하세요", true);
         try {
-          if (paper) { await api.updatePaper(paper.id, row); modal.close(); route(); }
-          else { const p = await api.insertPaper(row); modal.close(); location.hash = `#/paper/${p.id}`; }
+          if (paper) { await api.updatePaper(paper.id, row); modal.close(); route(); return; }
+          const p = await api.insertPaper(row);
+          // 불러온 저자를 순서·참여구분대로 추가 (소속·서명은 저자 DB에서)
+          const seen = new Set();
+          const picks = (imported?.rows || []).filter((x) => x.authorId && !seen.has(x.authorId) && seen.add(x.authorId));
+          for (const [i, x] of picks.entries()) {
+            const a = imported.db.find((d) => d.id === x.authorId);
+            await api.insertPA({ paper_id: p.id, author_id: a.id, author_order: i + 1, author_role: x.role, is_corresponding: x.role.includes("교신"),
+              affiliation_kr: a.affiliation_kr, affiliation_en: a.affiliation_en,
+              signature_url: a.signature_url || null, signed_at: a.signature_url ? new Date().toISOString() : null });
+          }
+          modal.close();
+          if (picks.length) toast(`논문과 저자 ${picks.length}명을 추가했습니다`);
+          location.hash = `#/paper/${p.id}`;
         } catch (err) { toast(errMsg(err), true); }
       });
+    }
+
+    // pdf.js 는 PDF 원고를 불러올 때만 내려받음
+    let pdfJsLoading = null;
+    function loadPdfJs() {
+      if (window.pdfjsLib) return Promise.resolve();
+      return (pdfJsLoading ||= new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; resolve(); };
+        s.onerror = () => { pdfJsLoading = null; reject(new Error("PDF 읽기 도구를 불러오지 못했습니다")); };
+        document.head.appendChild(s);
+      }));
     }
 
     // ───────────────────────── 화면: 논문 상세(관리) ─────────────────────────
