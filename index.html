@@ -15,6 +15,8 @@
   </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="consent-hwpx.js"></script>
   <style>
     :root {
       color-scheme: light only;
@@ -139,6 +141,9 @@
     .sign-row .muted { font-size: 13px; }
     .sign-row .c-sig { height: 44px; display: flex; align-items: center; }
     .sign-row .c-sig img { max-width: 110px; max-height: 44px; }
+    .paper-meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
+    .paper-meta dt { color: var(--muted); font-weight: 600; white-space: nowrap; }
+    .paper-meta dd { margin: 0; white-space: pre-line; word-break: break-word; }
     .sign-row .c-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     .sign-row .c-act .badge { cursor: default; }
     .sign-row .c-no { font-weight: 700; color: var(--muted); }
@@ -749,11 +754,27 @@
       $("#newPaper").onclick = () => openPaperForm();
     }
 
+    // 그동안 투고했던 저널 (cover letter 기준). 여기에 없는 저널도 한 번 입력하면 다음부터 목록에 나옴
+    const KNOWN_JOURNALS = [
+      "대한한의학회지 (Journal of Korean Medicine)",
+      "Integrative Medicine Research (IMR)",
+      "BMC Complementary Medicine and Therapies",
+      "BMC Medical Informatics and Decision Making",
+      "Complementary Therapies in Medicine (CTIM)",
+      "Current Research in Complementary & Alternative Medicine",
+      "Journal of Affective Disorders",
+      "Maturitas",
+      "Thorax",
+      "BMJ Open Respiratory Research",
+      "Healthcare (MDPI)",
+    ];
+
     async function openPaperForm(paper) {
       // 이전 논문들에 쓴 저널명·감사의 글을 최근 순으로 모아 다시 고를 수 있게 함
       const prev = await api.paperMeta().catch(() => []);
-      const uniq = (k) => [...new Set(prev.map((p) => p[k]?.trim()).filter(Boolean))];
-      const journals = uniq("journal"), acks = uniq("acknowledgement");
+      const uniq = (list) => [...new Set(list.map((s) => s?.trim()).filter(Boolean))];
+      const journals = uniq([...prev.map((p) => p.journal), ...KNOWN_JOURNALS]);
+      const acks = uniq(prev.map((p) => p.acknowledgement));
       const short = (s) => (s.length > 60 ? s.slice(0, 60) + "…" : s);
 
       const dlg = openModal(`
@@ -762,8 +783,11 @@
           <div class="dlg-body">
             <div class="field"><label>논문 제목 <span class="req">*</span></label><textarea name="title" rows="3">${esc(paper?.title)}</textarea></div>
             <div class="field" style="margin-top:12px"><label>투고 저널명</label>
-              <input type="text" name="journal" list="journalList" value="${esc(paper?.journal)}" placeholder="${journals.length ? "입력하거나 목록에서 선택" : "대한한의학회지 (Journal of Korean Medicine)"}" autocomplete="off">
-              <datalist id="journalList">${journals.map((j) => `<option value="${esc(j)}">`).join("")}</datalist></div>
+              <select id="journalPreset" style="margin-bottom:6px">
+                <option value="">-- 저널 선택 --</option>
+                ${journals.map((j, i) => `<option value="${i}" ${j === paper?.journal ? "selected" : ""}>${esc(j)}</option>`).join("")}
+              </select>
+              <input type="text" name="journal" value="${esc(paper?.journal)}" placeholder="목록에 없으면 직접 입력" autocomplete="off"></div>
             <div class="field" style="margin-top:12px"><label>감사의 글 <span class="muted">(Acknowledgement / 연구과제)</span></label>
               ${acks.length ? `<select id="ackPreset" style="margin-bottom:6px">
                 <option value="">-- 이전에 쓴 문구 선택 --</option>
@@ -775,6 +799,9 @@
           <div class="dlg-foot"><button type="button" data-close>취소</button><button type="submit" class="primary">${paper ? "저장" : "만들기"}</button></div>
         </form>`);
       $("textarea", dlg).focus();
+      const jPreset = $("#journalPreset", dlg), jInput = dlg.querySelector("[name=journal]");
+      jPreset.onchange = () => { if (jPreset.value !== "") jInput.value = journals[+jPreset.value]; };
+      jInput.oninput = () => { const i = journals.indexOf(jInput.value.trim()); jPreset.value = i < 0 ? "" : String(i); };
       const preset = $("#ackPreset", dlg);
       if (preset) preset.onchange = () => { if (preset.value !== "") dlg.querySelector("[name=acknowledgement]").value = acks[+preset.value]; };
       $("#paperForm", dlg).addEventListener("submit", async (e) => {
@@ -818,6 +845,7 @@
             <a class="btn" href="#/sign/${paper.id}">서명 화면 열기</a>
             <a class="btn" href="#/paper/${paper.id}/print">인쇄용 표</a>
             <button id="csv">CSV 내보내기</button>
+            <button id="consent">📄 저자동의서 (.hwpx)</button>
           </div>
         </div>
 
@@ -906,12 +934,52 @@
 
       $("#copyLink").onclick = () => copyText(signLink(paper.id));
       $("#csv").onclick = () => downloadCsv(paper, pas);
+      $("#consent").onclick = (e) => downloadConsent(paper, pas, e.currentTarget);
       $("#editPaper").onclick = () => openPaperForm(paper);
       $("#delPaper").onclick = async () => {
         if (!confirm(`이 논문을 삭제할까요?\n\n${paper.title}\n\n논문별 저자 연결과 서명 기록이 삭제됩니다. (저자 기본 정보는 남습니다)`)) return;
         try { await api.deletePaper(paper.id); toast("삭제했습니다"); location.hash = "#/"; }
         catch (err) { toast(errMsg(err), true); }
       };
+    }
+
+    // KIOM 논문 저자 동의서(HWPX) — 생성 로직은 consent-hwpx.js (academic-paper-toolkit 의 generate_agreement.py 와 같은 결과)
+    async function downloadConsent(paper, pas, btn) {
+      if (!pas.length) return toast("저자를 먼저 추가하세요", true);
+      const missing = [!paper.journal && "투고 저널명", !paper.acknowledgement && "감사의 글"].filter(Boolean);
+      if (missing.length && !confirm(`${missing.join(", ")}이(가) 비어 있습니다. 빈칸으로 만들까요?\n\n(채우려면 취소 후 논문 '수정'에서 입력하세요)`)) return;
+      if (pas.length > CONSENT_MAX_AUTHORS && !confirm(`동의서 양식의 저자 표는 ${CONSENT_MAX_AUTHORS}명까지입니다. ${CONSENT_MAX_AUTHORS + 1}번째 저자부터는 1페이지 표에 빠지고 전자서명 동의서 페이지만 만들어집니다. 계속할까요?`)) return;
+      const label = btn.textContent;
+      btn.disabled = true; btn.textContent = "만드는 중…";
+      try {
+        const [tpl, authors] = await Promise.all([
+          fetch("templates/consent_template.hwpx").then((r) => { if (!r.ok) throw new Error("양식 파일을 불러오지 못했습니다"); return r.arrayBuffer(); }),
+          Promise.all(pas.map(async (x, i) => {
+            const a = x.author;
+            const roles = [i === 0 && "제1저자", x.is_corresponding && "교신저자"].filter(Boolean);
+            const sigUrl = x.signature_url || a.signature_url;
+            let signature = null;
+            if (sigUrl) {
+              const r = await fetch(sigUrl);
+              if (r.ok) signature = { bytes: new Uint8Array(await r.arrayBuffer()), ext: r.headers.get("content-type")?.includes("png") ? ".png" : ".jpg" };
+            }
+            return { name: a.name_kr, role_type: roles.join(", ") || "공동저자", role_desc: a.default_role_ko || "연구 및 논문작성",
+              affiliation: x.affiliation_kr || a.affiliation_kr || "", internal: a.internal ?? true, project_participant: "참여", signature };
+          })),
+        ]);
+        const bytes = await buildConsentHwpx(tpl, { title: paper.title, journal: paper.journal, ack: paper.acknowledgement }, authors);
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([bytes], { type: "application/hwp+zip" }));
+        link.download = `논문저자동의서_${paper.title.replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}.hwpx`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        const noSig = authors.filter((a) => !a.signature).map((a) => a.name);
+        toast(noSig.length ? `동의서를 만들었습니다 (서명 없음: ${noSig.join(", ")})` : "동의서를 만들었습니다");
+      } catch (err) {
+        toast("동의서 생성 실패: " + errMsg(err), true);
+      } finally {
+        btn.disabled = false; btn.textContent = label;
+      }
     }
 
     function downloadCsv(paper, pas) {
@@ -962,6 +1030,10 @@
         <div class="card">
           <p class="muted small" style="margin:0 0 4px">저자 정보 확인 및 서명 요청</p>
           <h1>${esc(paper.title)}</h1>
+          ${paper.journal || paper.acknowledgement ? `<dl class="paper-meta">
+            ${paper.journal ? `<dt>투고 저널</dt><dd>${esc(paper.journal)}</dd>` : ""}
+            ${paper.acknowledgement ? `<dt>감사의 글</dt><dd>${esc(paper.acknowledgement)}</dd>` : ""}
+          </dl>` : ""}
         </div>
         <div class="card flush">
           <div style="padding:16px 16px 8px">
