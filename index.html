@@ -426,18 +426,23 @@
 
     const sigDlg = $("#sigdlg");
     const pad = new SignaturePad($("canvas", sigDlg));
-    let sigResolve = null;
+    let sigResolve = null, sigScrollY = 0;
 
     function openSignaturePad() {
       return new Promise((resolve) => {
         sigResolve = resolve;
         pad.clear();
+        // 카카오톡 등 인앱 브라우저는 페이지가 내려가 있으면 주소창을 숨겼다가
+        // 서명 도중 다시 꺼내며 화면 크기가 바뀜 → 맨 위로 올려 주소창이 보이는 상태로 시작
+        sigScrollY = window.scrollY;
+        window.scrollTo(0, 0);
         sigDlg.showModal();
         requestAnimationFrame(() => pad.resize());
       });
     }
     function closeSignaturePad(result) {
       sigDlg.close();
+      window.scrollTo(0, sigScrollY);
       sigResolve?.(result);
       sigResolve = null;
     }
