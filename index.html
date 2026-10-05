@@ -257,8 +257,9 @@
     }
 
     const api = {
-      papers: () => q(sb.from("papers").select("id,title,note,created_at,paper_authors(id,signature_url)").order("created_at", { ascending: false })),
+      papers: () => q(sb.from("papers").select("id,title,journal,note,created_at,paper_authors(id,signature_url)").order("created_at", { ascending: false })),
       paper: (id) => q(sb.from("papers").select("*").eq("id", id).single()),
+      paperMeta: () => q(sb.from("papers").select("journal,acknowledgement").order("created_at", { ascending: false })),
       paperAuthors: (id) => q(sb.from("paper_authors").select("*, author:authors(*)").eq("paper_id", id).order("author_order").order("id")),
       authors: () => q(sb.from("authors").select("*, paper_authors(count)").order("name_kr")),
       insertPaper: (row) => q(sb.from("papers").insert(row).select().single()),
@@ -740,7 +741,7 @@
             const total = p.paper_authors.length, done = p.paper_authors.filter((x) => x.signature_url).length;
             return `<a class="card paper-card" href="#/paper/${p.id}">
               <div class="title">${esc(p.title)}</div>
-              <div class="meta"><span>${fmtDate(p.created_at)}</span><span>서명 ${done} / ${total}</span></div>
+              <div class="meta"><span>${fmtDate(p.created_at)}${p.journal ? " · " + esc(p.journal) : ""}</span><span>서명 ${done} / ${total}</span></div>
               <div class="progress"><i style="width:${total ? (done / total) * 100 : 0}%"></i></div>
             </a>`;
           }).join("") : `<div class="card empty">아직 논문이 없습니다. <b>+ 새 논문</b>을 눌러 시작하세요.</div>`}
@@ -748,24 +749,42 @@
       $("#newPaper").onclick = () => openPaperForm();
     }
 
-    function openPaperForm(paper) {
+    async function openPaperForm(paper) {
+      // 이전 논문들에 쓴 저널명·감사의 글을 최근 순으로 모아 다시 고를 수 있게 함
+      const prev = await api.paperMeta().catch(() => []);
+      const uniq = (k) => [...new Set(prev.map((p) => p[k]?.trim()).filter(Boolean))];
+      const journals = uniq("journal"), acks = uniq("acknowledgement");
+      const short = (s) => (s.length > 60 ? s.slice(0, 60) + "…" : s);
+
       const dlg = openModal(`
         <form id="paperForm">
           <div class="dlg-head"><h2>${paper ? "논문 정보 수정" : "새 논문"}</h2><button type="button" class="ghost icon" data-close aria-label="닫기">✕</button></div>
           <div class="dlg-body">
             <div class="field"><label>논문 제목 <span class="req">*</span></label><textarea name="title" rows="3">${esc(paper?.title)}</textarea></div>
-            <div class="field" style="margin-top:12px"><label>메모 <span class="muted">(투고 저널 등, 선택)</span></label><input type="text" name="note" value="${esc(paper?.note)}"></div>
+            <div class="field" style="margin-top:12px"><label>투고 저널명</label>
+              <input type="text" name="journal" list="journalList" value="${esc(paper?.journal)}" placeholder="${journals.length ? "입력하거나 목록에서 선택" : "대한한의학회지 (Journal of Korean Medicine)"}" autocomplete="off">
+              <datalist id="journalList">${journals.map((j) => `<option value="${esc(j)}">`).join("")}</datalist></div>
+            <div class="field" style="margin-top:12px"><label>감사의 글 <span class="muted">(Acknowledgement / 연구과제)</span></label>
+              ${acks.length ? `<select id="ackPreset" style="margin-bottom:6px">
+                <option value="">-- 이전에 쓴 문구 선택 --</option>
+                ${acks.map((t, i) => `<option value="${i}">${esc(short(t))}</option>`).join("")}
+              </select>` : ""}
+              <textarea name="acknowledgement" rows="3" placeholder="이 연구는 한국한의학연구원 기본사업(과제번호: …)의 지원을 받아 수행되었습니다.">${esc(paper?.acknowledgement)}</textarea></div>
+            <div class="field" style="margin-top:12px"><label>메모 <span class="muted">(선택)</span></label><input type="text" name="note" value="${esc(paper?.note)}"></div>
           </div>
           <div class="dlg-foot"><button type="button" data-close>취소</button><button type="submit" class="primary">${paper ? "저장" : "만들기"}</button></div>
         </form>`);
       $("textarea", dlg).focus();
+      const preset = $("#ackPreset", dlg);
+      if (preset) preset.onchange = () => { if (preset.value !== "") dlg.querySelector("[name=acknowledgement]").value = acks[+preset.value]; };
       $("#paperForm", dlg).addEventListener("submit", async (e) => {
         e.preventDefault();
-        const title = e.target.title.value.trim(), note = e.target.note.value.trim() || null;
-        if (!title) return toast("제목을 입력하세요", true);
+        const val = (k) => e.target[k].value.trim() || null;
+        const row = { title: val("title"), journal: val("journal"), acknowledgement: val("acknowledgement"), note: val("note") };
+        if (!row.title) return toast("제목을 입력하세요", true);
         try {
-          if (paper) { await api.updatePaper(paper.id, { title, note }); modal.close(); route(); }
-          else { const p = await api.insertPaper({ title, note }); modal.close(); location.hash = `#/paper/${p.id}`; }
+          if (paper) { await api.updatePaper(paper.id, row); modal.close(); route(); }
+          else { const p = await api.insertPaper(row); modal.close(); location.hash = `#/paper/${p.id}`; }
         } catch (err) { toast(errMsg(err), true); }
       });
     }
@@ -783,7 +802,7 @@
         <div class="page-head">
           <div>
             <h1>${esc(paper.title)}</h1>
-            <p class="muted" style="margin:0">${paper.note ? esc(paper.note) + " · " : ""}서명 ${done} / ${pas.length} · 본인 확인 ${confirmed} / ${pas.length}</p>
+            <p class="muted" style="margin:0">${paper.journal ? "📰 " + esc(paper.journal) + " · " : ""}${paper.note ? esc(paper.note) + " · " : ""}서명 ${done} / ${pas.length} · 본인 확인 ${confirmed} / ${pas.length}</p>
           </div>
           <div class="actions">
             <button class="ghost" id="editPaper">수정</button>
@@ -855,7 +874,9 @@
         btn.disabled = true;
         const a = authors.find((x) => x.id === +btn.dataset.add);
         try {
-          await api.insertPA({ paper_id: id, author_id: a.id, author_order: nextOrder(), affiliation_kr: a.affiliation_kr, affiliation_en: a.affiliation_en });
+          // 저자 DB에 있는 서명을 그대로 가져옴 (저자가 서명 링크에서 바꿀 수 있음)
+          await api.insertPA({ paper_id: id, author_id: a.id, author_order: nextOrder(), affiliation_kr: a.affiliation_kr, affiliation_en: a.affiliation_en,
+            signature_url: a.signature_url || null, signed_at: a.signature_url ? new Date().toISOString() : null });
           toast(`${a.name_kr} 추가됨`);
           reload();
         } catch (err) { toast(errMsg(err), true); btn.disabled = false; }
