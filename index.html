@@ -103,8 +103,7 @@
     .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
     .badge.ok { background: var(--ok-weak); color: var(--ok); }
     .badge.wait { background: var(--warn-weak); color: var(--warn); }
-    .badge.star { background: var(--accent-weak); color: var(--accent); }
-    .progress { height: 6px; background: #eef0f3; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+    .badge.star { background: var(--accent-weak); color: var(--accent); }    .progress { height: 6px; background: #eef0f3; border-radius: 99px; overflow: hidden; margin-top: 10px; }
     .progress > i { display: block; height: 100%; background: var(--ok); }
 
     /* 논문 카드 */
@@ -701,7 +700,7 @@
     // 저자동의서 '참여구분' — 공동 제1저자·공동 교신저자는 여러 명에게 같은 값을 지정
     const AUTHOR_ROLES = ["공동저자", "제1저자", "교신저자", "제1저자, 교신저자"];
     const roleOf = (x) => x.author_role || (x.is_corresponding ? "교신저자" : "공동저자");
-    const roleBadge = (x) => (roleOf(x) === "공동저자" ? "" : `<span class="badge star">${esc(roleOf(x))}</span>`);
+    const roleBadge = (x) => `<span class="badge star">${esc(roleOf(x))}</span>`;
 
     const isIncomplete = (a) => !a.name_en || !a.affiliation_kr || !a.affiliation_en || !a.email;
 
