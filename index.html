@@ -145,7 +145,9 @@
     .dlg-foot { position: sticky; bottom: 0; background: var(--surface); padding: 12px 20px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
 
     /* 서명 패드 */
-    #sigdlg { width: min(760px, calc(100vw - 24px)); }
+    #sigdlg { width: min(760px, calc(100vw - 24px)); touch-action: none; overscroll-behavior: none; }
+    /* 서명 중 뒤 페이지가 스크롤되거나 모바일 주소창이 튀어나오지 않게 */
+    html:has(#sigdlg[open]), html:has(#sigdlg[open]) body { overflow: hidden; overscroll-behavior: none; }
     .pad-wrap { position: relative; height: 260px; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
     .pad-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
     .pad-line { position: absolute; left: 6%; right: 6%; bottom: 28%; border-bottom: 1.5px solid #d0d5dd; pointer-events: none; }
@@ -337,6 +339,10 @@
         };
         canvas.addEventListener("pointerup", end);
         canvas.addEventListener("pointercancel", end);
+        // iOS Safari 등은 touch-action만으로는 손가락 드래그가 페이지 스크롤·주소창 표시로 새어 나감
+        const block = (e) => { if (e.cancelable) e.preventDefault(); };
+        canvas.addEventListener("touchstart", block, { passive: false });
+        canvas.addEventListener("touchmove", block, { passive: false });
         new ResizeObserver(() => this.resize()).observe(canvas);
       }
       raw(e) {
@@ -446,6 +452,8 @@
       }
     });
     sigDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeSignaturePad(null); });
+    // 서명 창 어디를 끌어도 화면이 움직이지 않게 (버튼 탭은 그대로 동작)
+    sigDlg.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 
     // 업로드한 이미지는 최대 1200px로 줄여서 저장
     function shrinkImage(file) {
