@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>논문 저자 서명</title>
+  <script>
+    // 카카오톡 인앱 브라우저는 서명 중 주소창이 들락거려 화면이 바뀜 → 기본 브라우저로 열고 인앱 창은 닫음
+    if (/KAKAOTALK/i.test(navigator.userAgent)) {
+      location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href);
+      setTimeout(() => { location.href = "kakaotalk://inappbrowser/close"; }, 500);
+    }
+  </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
