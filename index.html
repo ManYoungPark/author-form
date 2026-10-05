@@ -280,6 +280,30 @@
       return `${SUPABASE_URL}/storage/v1/object/public/signatures/${fileName}`;
     }
 
+    // 서명 PNG는 투명 배경이라 휴대폰 강제 다크 모드에서 검은 바탕에 묻힘
+    // (CSS 흰 배경도 같이 검게 바뀜) → 흰 바탕을 이미지 자체에 입혀서 보여줌. 저장된 파일은 그대로.
+    const whiteSigCache = new Map();
+    function whiteSig(src) {
+      if (!whiteSigCache.has(src)) {
+        whiteSigCache.set(src, fetch(src).then((r) => r.blob()).then(createImageBitmap).then((bm) => {
+          const c = document.createElement("canvas");
+          c.width = bm.width; c.height = bm.height;
+          const ctx = c.getContext("2d");
+          ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(bm, 0, 0);
+          return new Promise((res) => c.toBlob((b) => res(URL.createObjectURL(b)), "image/png"));
+        }).catch(() => null));
+      }
+      return whiteSigCache.get(src);
+    }
+    document.addEventListener("load", async (e) => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement) || img.alt !== "서명" || img.dataset.white) return;
+      img.dataset.white = "1";
+      const url = await whiteSig(img.src);
+      if (url) img.src = url;
+    }, true);
+
     // ───────────────────────── 유틸 ─────────────────────────
     const $ = (s, root = document) => root.querySelector(s);
     const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -414,7 +438,8 @@
       }
       draw() {
         const { c, ctx } = this;
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.restore();
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.restore();
+        // ↑ 흰 바탕을 CSS가 아니라 캔버스에 직접 칠함: 강제 다크 모드가 CSS 배경은 검게 바꿔도 캔버스 내용은 그대로 둠
         SignaturePad.paint(ctx, this.strokes);
         c.parentElement.classList.toggle("drawn", !this.isEmpty());
       }
