@@ -179,7 +179,8 @@
             const s = t.textContent;
             if (!s) return;
             if (s.includes("[작성일자]") || /20\d\d\./.test(s)) t.textContent = date;
-            else if (s.includes("신청자")) t.textContent = `${" ".repeat(68)}신청자 :  ${a.name}   (인)`;
+            // 뒤에 서명 이미지(폭 36mm)가 붙으므로 앞 공백을 줄여 한 줄에 들어가게 함
+            else if (s.includes("신청자")) t.textContent = `${" ".repeat(36)}신청자 :  ${a.name}   (인)`;
           });
           if (sigRef.has(idx)) {
             const ps = desc(kids(trs[2], "tc")[0], "p");

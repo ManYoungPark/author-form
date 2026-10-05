@@ -124,6 +124,8 @@
     .author-row .sig { width: 90px; height: 40px; flex: none; display: grid; place-items: center; }
     .author-row .sig img { max-width: 90px; max-height: 40px; }
     .author-row .ctl { display: flex; gap: 2px; flex: none; }
+    .author-row .role-select { width: auto; flex: none; font-size: 13px; padding: 5px 8px; color: var(--muted); }
+    .author-row .role-select.on { color: var(--accent); border-color: var(--accent); background: var(--accent-weak); font-weight: 700; }
     .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
 
     /* 저자 선택 칩 */
@@ -696,6 +698,11 @@
       setTimeout(() => form.elements[ctx.author ? "affiliation_kr" : "name_kr"]?.focus(), 50);
     }
 
+    // 저자동의서 '참여구분' — 공동 제1저자·공동 교신저자는 여러 명에게 같은 값을 지정
+    const AUTHOR_ROLES = ["공동저자", "제1저자", "교신저자", "제1저자, 교신저자"];
+    const roleOf = (x) => x.author_role || (x.is_corresponding ? "교신저자" : "공동저자");
+    const roleBadge = (x) => (roleOf(x) === "공동저자" ? "" : `<span class="badge star">${esc(roleOf(x))}</span>`);
+
     const isIncomplete = (a) => !a.name_en || !a.affiliation_kr || !a.affiliation_en || !a.email;
 
     // 관리자: 이름만으로 저자를 논문에 추가 (나머지는 저자가 서명 링크에서 입력)
@@ -857,16 +864,17 @@
                 <div class="num">${i + 1}</div>
                 <div class="info">
                   <div class="name">${esc(x.author.name_kr)} <span class="muted" style="font-weight:400">${esc(x.author.name_en)}</span>
-                    ${x.is_corresponding ? `<span class="badge star">교신</span>` : ""}
                     ${x.signature_url ? `<span class="badge ok">서명 완료</span>` : `<span class="badge wait">서명 대기</span>`}
                     ${x.confirmed_at ? `<span class="badge ok" title="${esc(new Date(x.confirmed_at).toLocaleString("ko-KR"))}">✓ 본인 확인 ${fmtDate(x.confirmed_at)}</span>` : `<span class="badge wait">확인 대기</span>`}</div>
                   <div class="sub">${isIncomplete(x.author) ? "정보 미입력 — 서명 링크로 저자에게 받으세요" : `${esc(x.affiliation_kr || x.author.affiliation_kr)} · ${esc(x.author.email)}`}</div>
                 </div>
                 <div class="sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : ""}</div>
+                <select class="role-select${roleOf(x) !== "공동저자" ? " on" : ""}" data-role title="참여구분 (저자동의서에 들어감)">
+                  ${AUTHOR_ROLES.map((r) => `<option ${r === roleOf(x) ? "selected" : ""}>${r}</option>`).join("")}
+                </select>
                 <div class="ctl">
                   <button class="ghost icon" data-act="up" title="위로" ${i === 0 ? "disabled" : ""}>▲</button>
                   <button class="ghost icon" data-act="down" title="아래로" ${i === pas.length - 1 ? "disabled" : ""}>▼</button>
-                  <button class="ghost icon" data-act="corr" title="교신저자 지정/해제">${x.is_corresponding ? "★" : "☆"}</button>
                   <button class="ghost icon" data-act="edit" title="정보·서명">✏️</button>
                   <button class="ghost icon danger" data-act="remove" title="논문에서 제외">✕</button>
                 </div>
@@ -910,6 +918,13 @@
         } catch (err) { toast(errMsg(err), true); btn.disabled = false; }
       };
 
+      $("#paList").onchange = async (e) => {
+        if (!e.target.matches("[data-role]")) return;
+        const x = pas.find((p) => p.id === +e.target.closest("[data-pa]").dataset.pa);
+        const role = e.target.value;
+        try { await api.updatePA(x.id, { author_role: role, is_corresponding: role.includes("교신") }); reload(); }
+        catch (err) { toast(errMsg(err), true); }
+      };
       $("#paList").onclick = async (e) => {
         const act = e.target.closest("[data-act]")?.dataset.act;
         if (!act) return;
@@ -923,7 +938,6 @@
             await Promise.all(order.map((r, k) => (r.author_order !== k + 1 ? api.updatePA(r.id, { author_order: k + 1 }) : null)));
             reload();
           }
-          if (act === "corr") { await api.updatePA(x.id, { is_corresponding: !x.is_corresponding }); reload(); }
           if (act === "edit") openAuthorForm({ mode: "paper", author: x.author, pa: x, paperTitle: paper.title, onSaved: reload });
           if (act === "remove") {
             if (!confirm(`${x.author.name_kr} 님을 이 논문에서 제외할까요?\n(이 논문의 서명도 함께 삭제됩니다. 저자 기본 정보는 남습니다.)`)) return;
@@ -948,6 +962,10 @@
       if (!pas.length) return toast("저자를 먼저 추가하세요", true);
       const missing = [!paper.journal && "투고 저널명", !paper.acknowledgement && "감사의 글"].filter(Boolean);
       if (missing.length && !confirm(`${missing.join(", ")}이(가) 비어 있습니다. 빈칸으로 만들까요?\n\n(채우려면 취소 후 논문 '수정'에서 입력하세요)`)) return;
+      const noRole = ["제1저자", "교신저자"].filter((r) => !pas.some((x) => roleOf(x).includes(r)));
+      if (noRole.length && !confirm(`${noRole.join(", ")}가 지정되지 않았습니다. 모두 공동저자로 만들까요?
+
+(지정하려면 취소 후 저자 줄의 참여구분에서 고르세요)`)) return;
       if (pas.length > CONSENT_MAX_AUTHORS && !confirm(`동의서 양식의 저자 표는 ${CONSENT_MAX_AUTHORS}명까지입니다. ${CONSENT_MAX_AUTHORS + 1}번째 저자부터는 1페이지 표에 빠지고 전자서명 동의서 페이지만 만들어집니다. 계속할까요?`)) return;
       const label = btn.textContent;
       btn.disabled = true; btn.textContent = "만드는 중…";
@@ -956,14 +974,13 @@
           fetch("templates/consent_template.hwpx").then((r) => { if (!r.ok) throw new Error("양식 파일을 불러오지 못했습니다"); return r.arrayBuffer(); }),
           Promise.all(pas.map(async (x, i) => {
             const a = x.author;
-            const roles = [i === 0 && "제1저자", x.is_corresponding && "교신저자"].filter(Boolean);
             const sigUrl = x.signature_url || a.signature_url;
             let signature = null;
             if (sigUrl) {
               const r = await fetch(sigUrl);
               if (r.ok) signature = { bytes: new Uint8Array(await r.arrayBuffer()), ext: r.headers.get("content-type")?.includes("png") ? ".png" : ".jpg" };
             }
-            return { name: a.name_kr, role_type: roles.join(", ") || "공동저자", role_desc: a.default_role_ko || "연구 및 논문작성",
+            return { name: a.name_kr, role_type: roleOf(x), role_desc: a.default_role_ko || "연구 및 논문작성",
               affiliation: x.affiliation_kr || a.affiliation_kr || "", internal: a.internal ?? true, project_participant: "참여", signature };
           })),
         ]);
@@ -983,9 +1000,9 @@
     }
 
     function downloadCsv(paper, pas) {
-      const head = ["순서", "이름(한글)", "이름(영문)", "소속(한글)", "소속(영문)", "ORCID", "이메일", "교신저자", "서명일", "본인 확인일", "서명 이미지"];
+      const head = ["순서", "이름(한글)", "이름(영문)", "소속(한글)", "소속(영문)", "ORCID", "이메일", "참여구분", "서명일", "본인 확인일", "서명 이미지"];
       const rows = pas.map((x, i) => [i + 1, x.author.name_kr, x.author.name_en, x.affiliation_kr || x.author.affiliation_kr, x.affiliation_en || x.author.affiliation_en,
-        x.author.orcid, x.author.email, x.is_corresponding ? "Y" : "", fmtDate(x.signed_at), fmtDate(x.confirmed_at), x.signature_url]);
+        x.author.orcid, x.author.email, roleOf(x), fmtDate(x.signed_at), fmtDate(x.confirmed_at), x.signature_url]);
       const csv = [head, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
@@ -1006,9 +1023,10 @@
           <h1 style="font-size:17px;margin-bottom:12px">${esc(paper.title)}</h1>
           <div class="table-scroll">
           <table class="print-table">
-            <tr><th>No</th><th>이름</th><th>소속</th><th>ORCID</th><th>이메일</th><th>서명</th><th>서명일</th></tr>
+            <tr><th>No</th><th>참여구분</th><th>이름</th><th>소속</th><th>ORCID</th><th>이메일</th><th>서명</th><th>서명일</th></tr>
             ${pas.map((x, i) => `<tr>
-              <td class="c">${i + 1}${x.is_corresponding ? "*" : ""}</td>
+              <td class="c">${i + 1}</td>
+              <td class="c">${esc(roleOf(x))}</td>
               <td>${esc(x.author.name_kr)}<br><span class="muted">${esc(x.author.name_en)}</span></td>
               <td>${esc(x.affiliation_kr || x.author.affiliation_kr)}<br><span class="muted">${esc(x.affiliation_en || x.author.affiliation_en)}</span></td>
               <td>${esc(x.author.orcid)}</td>
@@ -1018,7 +1036,6 @@
             </tr>`).join("")}
           </table>
           </div>
-          ${pas.some((x) => x.is_corresponding) ? `<p class="small muted">* 교신저자</p>` : ""}
         </div>`;
     }
 
@@ -1047,8 +1064,8 @@
               const dash = `<span class="muted">—</span>`;
               return `
               <div class="sign-row" data-pa="${x.id}">
-                <div class="c-no">${i + 1}${x.is_corresponding ? `<span class="badge star" style="margin-left:4px">교신</span>` : ""}</div>
-                <div class="c-name"><b>${esc(a.name_kr)}</b><br><span class="muted">${a.name_en ? esc(a.name_en) : dash}</span></div>
+                <div class="c-no">${i + 1}</div>
+                <div class="c-name"><b>${esc(a.name_kr)}</b> ${roleBadge(x)}<br><span class="muted">${a.name_en ? esc(a.name_en) : dash}</span></div>
                 <div class="c-aff">${x.affiliation_kr || a.affiliation_kr ? esc(x.affiliation_kr || a.affiliation_kr) : dash}<br><span class="muted">${x.affiliation_en || a.affiliation_en ? esc(x.affiliation_en || a.affiliation_en) : ""}</span></div>
                 <div class="c-mail">${a.email ? esc(a.email) : dash}${a.orcid ? `<br><span class="muted">ORCID ${esc(a.orcid)}</span>` : ""}</div>
                 <div class="c-sig">${x.signature_url ? `<img src="${esc(x.signature_url)}" alt="서명">` : `<span class="badge wait">${isIncomplete(a) ? "정보·서명 필요" : "서명 필요"}</span>`}</div>
